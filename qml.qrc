@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/">
+    <file>/home/pribolab/Project/FluorescenceQuant/qml/main.qml</file>
+  </qresource>
+</RCC>
