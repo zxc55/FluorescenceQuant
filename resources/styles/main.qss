@@ -1,0 +1,66 @@
+QWidget {
+    font-size: 24px;
+}
+
+/* QWidget:enabled {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+QWidget:disabled {
+    color: gray;
+} */
+QWidget::item:disabled {
+    color: gray;       /* 灰色文字 */
+    background: #f0f0f0; /* 淡灰背景，可选 */
+}
+
+
+QWidget:focus {
+    outline: none;
+}
+
+QPushButton:focus {
+    outline: none;
+}
+
+QLineEdit:focus {
+    outline: none;
+}
+
+QComboBox:focus {
+    outline: none;
+}
+
+QLabel {
+    qproperty-alignment: 'AlignCenter';
+    color: #000000;
+}
+
+QLabel:disabled {
+    color: gray;
+}
+
+/* 其他控件样式，例如按钮 */
+QPushButton {
+    background-color: #0078d4;
+    color: #ffffff;
+    padding: 8px;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #005a9e;
+}
+
+QLineEdit:read-only {
+    border: 1px solid lightgray;
+    background: #f0f0f0;
+    color: gray;
+}
+QCheckBox::indicator{
+    width: 30px;
+    height: 30px;
+}
