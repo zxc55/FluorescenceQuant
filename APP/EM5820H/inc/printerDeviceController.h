@@ -11,8 +11,9 @@ public:
     void start();
     void stop();
     void test();
+    int a, b, c;
 
 private:
-    PrinterManager reader1;
+    PrinterManager& redar1;
 };
 #endif  // PRINTERDEVICECONTROLLER_H_

@@ -43,8 +43,9 @@ endif()
 # -----------------------------------------------
 # 包含路径
 # -----------------------------------------------
-include_directories(APP/ADS1115/inc)
-include_directories(APP/EM5820H/inc)
+include_directories(${CMAKE_SOURCE_DIR}/APP/ADS1115/inc)
+include_directories(${CMAKE_SOURCE_DIR}/APP/EM5820H/inc)
+include_directories(${CMAKE_SOURCE_DIR}/APP/libmodbus/include)
 # -----------------------------------------------
 # 源文件与头文件
 # -----------------------------------------------
@@ -72,12 +73,29 @@ add_executable(${PROJECT_NAME}
     ${QRC_FILE}
     ${APP_RCS}
 )
+link_directories(${CMAKE_SOURCE_DIR}/APP/libmodbus/lib)
 
-add_library(printer SHARED IMPORTED)
-set_target_properties(printer PROPERTIES IMPORTED_LOCATION
-    "${CMAKE_CURRENT_SOURCE_DIR}/libprinter_1.0.3.so"
+
+if(${TARGET_BOARD} STREQUAL "全志T113-S3")
+    add_library(printer SHARED IMPORTED)
+    set_target_properties(printer PROPERTIES IMPORTED_LOCATION
+        "${CMAKE_CURRENT_SOURCE_DIR}/libprinter_1.0.3.so"
+    )   
+target_link_libraries(FluorescenceQuant PRIVATE
+    printer
+    ${CMAKE_SOURCE_DIR}/APP/libmodbus/lib/libmodbus.so
 )
-target_link_libraries(FluorescenceQuant PRIVATE printer)
+
+else()  
+
+endif()
+
+
+
+
+
+
+
 # -----------------------------------------------
 # 链接 Qt 库
 # -----------------------------------------------

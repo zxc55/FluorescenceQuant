@@ -34,6 +34,8 @@ void PrinterManager::stop() {
     qDebug() << "Printer thread stopped.";
 }
 bool PrinterManager::initPrinter() {
+    // #ifdef DLOCAL_BUILD
+
     printer = new_printer();
     int err = printer->device()
                   ->usb()
@@ -46,32 +48,37 @@ bool PrinterManager::initPrinter() {
     }
 
     qDebug() << "Printer init success";
+    // #endif
     return true;
 }
+PrinterManager& PrinterManager::instance() {
+    static PrinterManager instance;
+    return instance;
+}
 void PrinterManager::setupListeners() {
-    printer->listener()
-        ->no_paper(1, []() {
-            qWarning() << "printer no paper !!!";
-            // 在这里可以加上你的自定义逻辑
-            // 例如：蜂鸣器报警、上报日志等
-        })
-        ->temp_high(1, []() {
-            qWarning() << "printer temp high !!!";
-            // 例如：风扇开启或报警提示
-        })
-        ->paper_ok(1, []() {
-            qDebug() << "printer paper ok !!!";
-        })
-        ->temp_ok(1, []() {
-            qDebug() << "printer temp ok !!!";
-        })
-        ->usb_disconnect(1, []() {
-            qWarning() << "usb disconnect event!!!";
-        })
-        ->usb_connect(1, []() {
-            qDebug() << "usb connect event!!!";
-        })
-        ->on();
+    // printer->listener()
+    //     ->no_paper(1, []() {
+    //         qWarning() << "printer no paper !!!";
+    //         // 在这里可以加上你的自定义逻辑
+    //         // 例如：蜂鸣器报警、上报日志等
+    //     })
+    //     ->temp_high(1, []() {
+    //         qWarning() << "printer temp high !!!";
+    //         // 例如：风扇开启或报警提示
+    //     })
+    //     ->paper_ok(1, []() {
+    //         qDebug() << "printer paper ok !!!";
+    //     })
+    //     ->temp_ok(1, []() {
+    //         qDebug() << "printer temp ok !!!";
+    //     })
+    //     ->usb_disconnect(1, []() {
+    //         qWarning() << "usb disconnect event!!!";
+    //     })
+    //     ->usb_connect(1, []() {
+    //         qDebug() << "usb connect event!!!";
+    //     })
+    //     ->on();
 }  // ---------------- 测试设置 ----------------
 void PrinterManager::testSettings() {
     execute_ret_t ret;
@@ -107,6 +114,8 @@ void PrinterManager::testSettings() {
 
 // ---------------- 打印文本 ----------------
 void PrinterManager::testText() {
+    // if (!initPrinter())
+    //     return;
     uint8_t CP936[] = u8"CodePage 936:东为打印机";
     uint8_t CP949[] = u8"CodePage 949:동위프린터테스트";
     uint8_t CP950[] = u8"CodePage 950:小票打印機";
@@ -115,7 +124,12 @@ void PrinterManager::testText() {
     printer->text()->encoding(ENCODING_CP936)->utf8_text(CP936)->newline();
     printer->text()->encoding(ENCODING_CP949)->utf8_text(CP949)->newline();
     printer->text()->encoding(ENCODING_CP950)->utf8_text(CP950)->newline();
-    printer->text()->encoding(ENCODING_CP932)->utf8_text(CP932)->newline();
+    printer->text()->encoding(ENCODING_CP932)->utf8_text(CP932)->print();
+    // printer->qr_code()
+    //     ->align(ALIGN_RIGHT)
+    //     ->set("https://www.bilibili.com/", 5, QR_ECC_H)
+    //     ->print();
+    qDebug() << "printer 22222" << printer;
 }
 
 // ---------------- 打印二维码 ----------------
@@ -133,30 +147,29 @@ void PrinterManager::testBarcode() {
         ->set(BAR_UPC_A, "123456789005", 2, 100, ABOVE_AND_BELOW)
         ->print();
     printer->text()->newline();
+    qDebug() << "printer " << printer;
 }
 
 // ---------------- 卸载 ----------------
 void PrinterManager::deinitPrinter() {
     if (printer) {
-        printer->device()->usb()->deinit();
+        // printer->device()->usb()->deinit();
         qDebug() << "Printer deinitialized";
     }
 }
 
 // ---------------- 主线程逻辑 ----------------
 void PrinterManager::run() {
-    if (!initPrinter())
-        return;
+    // if (!initPrinter())
+    //     return;
 
     setupListeners();
     testSettings();
     // testText();
-    // testQRCode();
-    testBarcode();
-
+    testQRCode();
+    // testText();
+    qDebug() << "printer1111 " << printer;
     while (running.load()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-
-    // deinitPrinter();
 }

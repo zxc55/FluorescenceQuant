@@ -12,20 +12,27 @@
 class PrinterManager : public QObject {
     Q_OBJECT
 public:
-    PrinterManager();
-    ~PrinterManager();
-
     // 启动和停止后台线程
     void start();
     void stop();
     void testSettings();
     void testText();
+    bool initPrinter();
+    static PrinterManager& instance();
 
 private:
+    PrinterManager();
+    ~PrinterManager();
+    PrinterManager(const PrinterManager&) = delete;
+    PrinterManager& operator=(const PrinterManager&) = delete;
+
+    // ❌ 禁止移动与移动赋值（C++11 起）
+    PrinterManager(PrinterManager&&) = delete;
+    PrinterManager& operator=(PrinterManager&&) = delete;
     // 线程主逻辑
     void run();
     // 各类功能函数
-    bool initPrinter();
+
     void setupListeners();
     void testQRCode();
     void testBarcode();

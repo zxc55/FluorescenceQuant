@@ -30,7 +30,8 @@ int main(int argc, char* argv[]) {
 
     QQmlApplicationEngine engine;
     MainViewModel viewModel;
-    PrinterManager printer;
+    PrinterManager& printer1 = PrinterManager::instance();
+    printer1.initPrinter();
     QFile f(":/styles/main.qss");  // ":/resources/styles/main.qss" 或 ":/resources/styles/main.qss"
     if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
         app.setStyleSheet(QString::fromUtf8(f.readAll()));
@@ -39,7 +40,6 @@ int main(int argc, char* argv[]) {
         printf("Load stylesheet failed.\n");
     }
     engine.rootContext()->setContextProperty("mainViewModel", &viewModel);
-    engine.rootContext()->setContextProperty("printerManager", &printer);
     const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &app, [url](QObject* obj, const QUrl& objUrl) {
         if (!obj && url == objUrl)
