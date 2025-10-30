@@ -1,62 +1,94 @@
-#ifndef IIOREADERTHREAD_H_
-#define IIOREADERTHREAD_H_
-
+#pragma once
 #include <QElapsedTimer>
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <deque>
 
-// 只读通道0（AIN0）的 IIO 轮询采集器（sysfs 轮询，不用触发器/缓冲）
 class IIOReaderThread : public QObject {
     Q_OBJECT
 public:
     explicit IIOReaderThread(QObject* parent = nullptr);
     ~IIOReaderThread();
 
-    // intervalMs: 轮询周期（默认 50ms）
+    // 启动/停止（intervalMs 轮询周期；samplesPerRead 预留未用）
     void start(int intervalMs = 50, int samplesPerRead = 1);
     void stop();
 
+    // 配置：目标 ODR 与设备序号（iio:deviceX 的 X）
+    void setDesiredRateHz(int hz) { desiredRateHz = hz; }
+    void setDeviceIndex(int idx) { deviceIndex = idx; }
+
+    // 滤波控制（默认开启，窗口=5）
+    void setMovAvgEnabled(bool on) {
+        filterEnabled = on;
+        clearFilter();
+    }
+    void setMovAvgWindow(int w) {
+        filterWindow = (w > 1 ? w : 1);
+        clearFilter();
+    }
+
 signals:
-    // 新电压值（单位：伏）
-    void newData(double value);
+    void newData(double value);  // 推送折算后的电压(单位：伏)
 
 private slots:
-    void readIIODevice();  // 定时采样
-    void watchdogTick();   // 看门狗（卡住时自恢复）
+    void readIIODevice();  // 定时轮询
+    void watchdogTick();   // 看门狗自愈
 
 private:
-    // 初始化/恢复：定位 iio:deviceX、禁用 autosuspend、关 buffer、设采样率、探测通道0 raw/scale
-    bool ensureSysfsReady();
-    void recoverSysfs();
-
-    // sysfs 读写工具
+    // ---------- 工具 ----------
+    bool ensureSysfsReady();  // 找目录、关buffer、设采样率、定位 raw/scale
+    void recoverSysfs();      // 自愈流程
     bool writeSysfsString(const QString& path, const QByteArray& s);
-    bool readSysfsIntPosix(const QString& path, int& out);   // POSIX 读取 int（稳）
-    bool readSysfsDouble(const QString& path, double& out);  // Qt 读取 double（足够）
-
-    // 写完采样率后的预热读取（避免短暂空读）
-    void warmupReads(const QString& rawPath, int tries = 6, int sleepMs = 5);
-
-    // 单位换算（scale<0.1→V/LSB，否则按 mV/LSB 或 raw≈mV 处理）
+    bool readSysfsIntPosix(const QString& path, int& out);   // 稳健读整数
+    bool readSysfsDouble(const QString& path, double& out);  // 读浮点
+    static bool parseFirstIntLoose(const QByteArray& bytes, int& out);
+    void warmupReads(const QString& rawPath, int tries, int sleepMs);
     static double voltageFromRawAndScale(int raw, double scale);
 
+    // ---------- 滤波 ----------
+    double applyMovingAverage(double x);
+    void clearFilter() {
+        fifo.clear();
+        fifoSum = 0.0;
+    }
+
 private:
-    QTimer* timer = nullptr;
-    QTimer* watchdog = nullptr;
-    bool running = false;
-    int intervalMs_ = 50;
+    // 定时器
+    QTimer* timer{nullptr};
+    QTimer* watchdog{nullptr};
 
-    // 缓存路径
+    // 状态
+    bool running{false};
+    int intervalMs_{50};
+    int samplesPerRead_{1};
+
+    // IIO sysfs 路径缓存
     QString sysfsDevDir;          // /sys/bus/iio/devices/iio:deviceX
-    QString rawAttrPathCached;    // 仅通道0：in_voltage0_raw 或 in_voltage0_input
-    QString scaleAttrPathCached;  // 仅通道0：in_voltage0_scale
-    QString powerControlPath;     // /power/control（禁用 autosuspend）
+    QString rawAttrPathCached;    // in_voltage0_raw / in_voltage0_input
+    QString scaleAttrPathCached;  // in_voltage0_scale
+    QString powerControlPath;     // power/control
 
-    // 卡住检测
-    int lastRaw = INT_MIN;
-    int sameCount = 0;
-    int stallThreshold = 100;  // 连续相同100次（约5s@50ms）视为卡住
+    // 设备选择与速率
+    int deviceIndex{0};      // iio:deviceX 的 X
+    int desiredRateHz{475};  // ADS1115 的 475Hz 逼近 500Hz
+
+    // 卡滞检测
+    int sameCount{0};
+    const int stallThreshold{100};
+    int lastRaw{INT_MIN};
     QElapsedTimer lastEmitTick;
+
+    // 滤波（滑动平均）
+    bool filterEnabled{false};
+    int filterWindow{5};
+    std::deque<double> fifo;
+    double fifoSum{0.0};
+    bool scaleIsMilli_ = true;      // true 表示 scale 是 mV/LSB
+    double lastGoodScale = 0.0625;  // 默认兜底：0.0625 mV/LSB（ADS1115 ±2.048V）
+    // —— 最近一次有效的量，用于兜底 ——
+    //  double lastGoodScale{0.0001875};  // 0.1875mV/LSB => 0.0001875V
+    double lastGoodValue{0.0};
+    int invalidLogCounter{0};  // 限频打印
 };
-#endif  // IIOREADERTHREAD_H

@@ -1,19 +1,21 @@
-// MainViewModel.cpp
 #include "MainViewModel.h"
+
+#include <QDebug>
 
 MainViewModel::MainViewModel(QObject* parent)
     : QObject(parent) {
-    connect(&controller, &IIODeviceController::newData, this, &MainViewModel::newData);
+    // 采集数据转发给 QML
+    connect(&controller, &IIODeviceController::newData,
+            this, &MainViewModel::newData);
 }
 
 void MainViewModel::startReading() {
-    controller.start(50, 20);
-    controller1.start();
+    // 50ms 轮询, 475Hz 采样, iio:device0
+    controller.start(50, 475, 0);
+    qInfo() << "开始采集：interval=50ms, rate=475Hz, device=iio:device0";
 }
 
 void MainViewModel::stopReading() {
     controller.stop();
-    controller1.test();
-}
-void MainViewModel::printer_test() {
+    qInfo() << "停止采集";
 }

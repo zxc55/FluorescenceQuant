@@ -1,4 +1,4 @@
-prefix=/home/pribolab/Project/FluorescenceQuant
+prefix=/home/pribolab/Project/FluorescenceQuant/APP/libmodbus
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include

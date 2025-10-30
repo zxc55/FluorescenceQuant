@@ -1,10 +1,16 @@
 #include <QApplication>
+#include <QDebug>
 #include <QFile>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <chrono>
+#include <iostream>
+#include <thread>
 
-#include "APP/EM5820H/inc/PrinterManager.h"
 #include "APP/MainViewModel.h"
+#include "ModbusWorkerThread.h"
+#include "MotorController.h"
+#include "PrinterManager.h"
 static void setupQtDpiAndPlatform() {
 #ifndef LOCAL_BUILD
     qputenv("QT_QPA_PLATFORM",
@@ -14,6 +20,7 @@ static void setupQtDpiAndPlatform() {
     qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
     qputenv("QT_SCALE_FACTOR", "1");
     qputenv("QT_FONT_DPI", "96");
+    qDebug() << "UI thread id =" << QThread::currentThreadId();
 
     // 清掉可能在旧脚本里遗留、会“顶掉”上面设置的变量（可选）
     qunsetenv("QT_DEVICE_PIXEL_RATIO");
@@ -27,6 +34,9 @@ int main(int argc, char* argv[]) {
     setupQtDpiAndPlatform();
     QApplication app(argc, argv);
     QApplication::setOverrideCursor(Qt::BlankCursor);
+    qRegisterMetaType<QVector<uint16_t>>("QVector<uint16_t>");
+    // ✅ 注册 MotorController 给 QML 使用
+    qmlRegisterType<MotorController>("Motor", 1, 0, "MotorController");
 
     QQmlApplicationEngine engine;
     MainViewModel viewModel;
@@ -45,6 +55,12 @@ int main(int argc, char* argv[]) {
         if (!obj && url == objUrl)
             QCoreApplication::exit(-1); }, Qt::QueuedConnection);
     engine.load(url);
-
+    // QTimer* timer = new QTimer(&app);
+    // QObject::connect(timer, &QTimer::timeout, []() {
+    //     auto& modbus = ModbusDeviceController::instance();
+    //     modbus.write(5, {1234});
+    //     modbus.read(ModbusCommandType::ReadHolding, 0, 10);
+    // });
+    // timer->start(2000);
     return app.exec();
 }

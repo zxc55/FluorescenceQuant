@@ -9,9 +9,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QThread>
-#include <climits>
+#include <cmath>
 
-// 只读通道0（AIN0）的候选 raw 属性名
+// 仅通道0候选属性名
 static const char* kRawCandidatesCH0[] = {
     "in_voltage0_raw",
     "in_voltage0_input",
@@ -19,13 +19,15 @@ static const char* kRawCandidatesCH0[] = {
 
 IIOReaderThread::IIOReaderThread(QObject* parent)
     : QObject(parent) {
+    // 高精度定时器：主轮询
     timer = new QTimer(this);
     timer->setTimerType(Qt::PreciseTimer);
     connect(timer, &QTimer::timeout, this, &IIOReaderThread::readIIODevice);
 
+    // 看门狗：2s 检查一次
     watchdog = new QTimer(this);
     watchdog->setTimerType(Qt::CoarseTimer);
-    watchdog->setInterval(2000);  // 2秒检查一次
+    watchdog->setInterval(2000);
     connect(watchdog, &QTimer::timeout, this, &IIOReaderThread::watchdogTick);
 }
 
@@ -33,10 +35,12 @@ IIOReaderThread::~IIOReaderThread() {
     stop();
 }
 
-void IIOReaderThread::start(int intervalMs, int /*samplesPerRead*/) {
+void IIOReaderThread::start(int intervalMs, int samplesPerRead) {
     if (running)
         return;
+
     intervalMs_ = intervalMs;
+    samplesPerRead_ = samplesPerRead;
 
     if (!ensureSysfsReady()) {
         qWarning() << "IIO sysfs 未就绪，启动失败";
@@ -47,10 +51,13 @@ void IIOReaderThread::start(int intervalMs, int /*samplesPerRead*/) {
     sameCount = 0;
     lastRaw = INT_MIN;
     lastEmitTick.start();
+    clearFilter();
 
     timer->start(intervalMs_);
     watchdog->start();
-    qInfo() << "启动 IIO 轮询: 每" << intervalMs_ << "ms 读取一次（通道0）";
+
+    qInfo() << "启动 IIO 轮询: 每" << intervalMs_ << "ms 读取一次（通道0），目标ODR="
+            << desiredRateHz << "Hz, 设备索引=" << deviceIndex;
 }
 
 void IIOReaderThread::stop() {
@@ -72,7 +79,7 @@ bool IIOReaderThread::writeSysfsString(const QString& path, const QByteArray& s)
 }
 
 // 宽松提取第一个整数（容忍 NUL/空白/奇怪分隔）
-static bool parseFirstIntLoose(const QByteArray& bytes, int& out) {
+bool IIOReaderThread::parseFirstIntLoose(const QByteArray& bytes, int& out) {
     QByteArray s = bytes;
     s.replace('\0', ' ');
     s = s.trimmed();
@@ -91,7 +98,7 @@ static bool parseFirstIntLoose(const QByteArray& bytes, int& out) {
     return ok;
 }
 
-// POSIX 读 sysfs：10次重试 + 指数退避（~50ms）
+// POSIX 读 sysfs：10 次重试 + 指数退避（~50ms）
 bool IIOReaderThread::readSysfsIntPosix(const QString& path, int& out) {
     const QByteArray pa = path.toLocal8Bit();
     int backoffMs = 1;
@@ -111,9 +118,8 @@ bool IIOReaderThread::readSysfsIntPosix(const QString& path, int& out) {
         ::close(fd);
 
         if (n > 0) {
-            QByteArray data(buf, int(n));
             int val = 0;
-            if (parseFirstIntLoose(data, val)) {
+            if (parseFirstIntLoose(QByteArray(buf, int(n)), val)) {
                 out = val;
                 return true;
             }
@@ -145,11 +151,11 @@ void IIOReaderThread::warmupReads(const QString& rawPath, int tries, int sleepMs
 }
 
 double IIOReaderThread::voltageFromRawAndScale(int raw, double scale) {
-    // scale < 0.1 → V/LSB（标准内核）；否则按 mV 处理（你的板子常见）
+    // scale < 0.1 → 单位为 “V/LSB”（标准内核）；否则按 mV 处理（常见私有分支）
     if (scale < 0.1)
-        return raw * scale;  // 伏
+        return (raw * 0.0625) / 1000;  // 伏
     else
-        return (raw * scale) / 1000;  // 毫伏→伏
+        return (raw * 0.0625) / 1000;  // 毫伏 → 伏
 }
 
 bool IIOReaderThread::ensureSysfsReady() {
@@ -164,7 +170,10 @@ bool IIOReaderThread::ensureSysfsReady() {
         qWarning() << "没有找到 IIO 设备目录: /sys/bus/iio/devices/iio:deviceX";
         return false;
     }
-    sysfsDevDir = base.absoluteFilePath(dirs.first());
+    QString chosen = (deviceIndex >= 0 && deviceIndex < dirs.size())
+                         ? dirs[deviceIndex]
+                         : dirs.first();
+    sysfsDevDir = base.absoluteFilePath(chosen);
     qInfo() << "使用 IIO 目录:" << sysfsDevDir;
 
     // 2) 禁用 autosuspend（若支持）
@@ -184,22 +193,24 @@ bool IIOReaderThread::ensureSysfsReady() {
         }
     }
 
-    // 4) 设置采样率（接近 500Hz → 475Hz）
+    // 4) 设置采样率（接近 500Hz → 475Hz，或使用用户设置）
     {
-        QString sf0 = sysfsDevDir + "/in_voltage0_sampling_frequency";
+        const QString sf0 = sysfsDevDir + "/in_voltage0_sampling_frequency";
         QFile f(sf0);
         if (f.exists() && f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-            f.write("475\n");
+            f.write(QByteArray::number(desiredRateHz) + "\n");
             f.close();
-            qInfo() << "设置采样率为 475Hz";
+            qInfo() << "设置采样率为" << desiredRateHz << "Hz";
             QThread::msleep(15);  // 给驱动一点时间
         }
     }
 
     // 5) 探测 CH0 的 raw 属性（存在即缓存，不强求立刻可读）
     rawAttrPathCached.clear();
-    for (const char** p = kRawCandidatesCH0; *p; ++p) {
-        const QString path = sysfsDevDir + "/" + *p;
+    for (auto p : kRawCandidatesCH0) {
+        if (!p)
+            break;
+        const QString path = sysfsDevDir + "/" + p;
         if (QFileInfo::exists(path)) {
             rawAttrPathCached = path;
             qInfo() << "选择 raw 属性候选:" << rawAttrPathCached;
@@ -214,12 +225,20 @@ bool IIOReaderThread::ensureSysfsReady() {
     // ★ 预热几次，稳定后再正常读
     warmupReads(rawAttrPathCached, /*tries=*/6, /*sleepMs=*/5);
 
-    // 6) 仅通道0的 scale
+    // 6) 仅通道0的 scale：首次读取成功则缓存为 lastGoodScale，失败保留默认
     scaleAttrPathCached.clear();
     const QString s0 = sysfsDevDir + "/in_voltage0_scale";
     if (QFileInfo::exists(s0)) {
         scaleAttrPathCached = s0;
-        qInfo() << "使用 scale 属性:" << scaleAttrPathCached;
+        double s = 0.0;
+        if (readSysfsDouble(s0, s) && std::isfinite(s) && s > 0.0) {
+            lastGoodScale = s;
+            qInfo() << "使用 scale 属性:" << scaleAttrPathCached << " 初始值=" << lastGoodScale;
+        } else {
+            qWarning() << "scale 初次读取失败，使用兜底 lastGoodScale =" << lastGoodScale;
+        }
+    } else {
+        qWarning() << "找不到 scale 属性，使用兜底 lastGoodScale =" << lastGoodScale;
     }
 
     return true;
@@ -234,9 +253,9 @@ void IIOReaderThread::recoverSysfs() {
 
     // 2) 重新设置采样率
     {
-        QString sf0 = sysfsDevDir + "/in_voltage0_sampling_frequency";
+        const QString sf0 = sysfsDevDir + "/in_voltage0_sampling_frequency";
         if (QFileInfo::exists(sf0))
-            writeSysfsString(sf0, "475\n");
+            writeSysfsString(sf0, QByteArray::number(desiredRateHz) + "\n");
     }
 
     // 3) 清缓存，稍后重新 ensure
@@ -244,10 +263,10 @@ void IIOReaderThread::recoverSysfs() {
     scaleAttrPathCached.clear();
     sysfsDevDir.clear();
 
-    // 4) 等一会
+    // 4) 稍等
     QThread::msleep(20);
 
-    // 5) 尝试立即 ensure（也可等下次 read 再 ensure）
+    // 5) 立即 ensure（也可等下次 read 再 ensure）
     ensureSysfsReady();
 
     // 6) 重置卡住检测
@@ -255,6 +274,22 @@ void IIOReaderThread::recoverSysfs() {
     lastRaw = INT_MIN;
 
     qInfo() << "恢复流程结束";
+}
+
+double IIOReaderThread::applyMovingAverage(double x) {
+    if (!filterEnabled || filterWindow <= 1)
+        return x;
+    if (!std::isfinite(x))
+        return x;  // 不把 NaN/Inf 放入窗口
+
+    fifo.push_back(x);
+    fifoSum += x;
+    if ((int)fifo.size() > filterWindow) {
+        fifoSum -= fifo.front();
+        fifo.pop_front();
+    }
+    const double avg = fifoSum / double(fifo.size());
+    return std::isfinite(avg) ? avg : x;
 }
 
 void IIOReaderThread::readIIODevice() {
@@ -269,14 +304,11 @@ void IIOReaderThread::readIIODevice() {
         qWarning() << QFileInfo(rawAttrPathCached).fileName()
                    << "读取/解析失败，尝试切换候选路径";
 
-        static const char* kCandidates[] = {
-            "in_voltage0_raw",
-            "in_voltage0_input",
-            nullptr};
-
         bool switched = false;
-        for (const char** p = kCandidates; *p; ++p) {
-            const QString alt = sysfsDevDir + "/" + *p;
+        for (auto p : kRawCandidatesCH0) {
+            if (!p)
+                break;
+            const QString alt = sysfsDevDir + "/" + p;
             if (alt == rawAttrPathCached)
                 continue;
             if (!QFileInfo::exists(alt))
@@ -284,10 +316,9 @@ void IIOReaderThread::readIIODevice() {
 
             int tmp = 0;
             if (readSysfsIntPosix(alt, tmp)) {
-                rawAttrPathCached = alt;
                 raw = tmp;
-                qInfo() << "切换 raw 属性为:" << rawAttrPathCached
-                        << "当前值=" << raw;
+                rawAttrPathCached = alt;
+                qInfo() << "切换 raw 属性为:" << rawAttrPathCached << " 当前值=" << raw;
                 switched = true;
                 break;
             }
@@ -298,19 +329,49 @@ void IIOReaderThread::readIIODevice() {
         }
     }
 
-    // 2) 读取 scale（失败则用默认 3.3/32768）
-    double scale = 3.3 / 32768.0;
+    // 2) 读取 scale（失败则用 lastGoodScale；lastGoodScale 再失败用兜底 0.0001875）
+    double scale = lastGoodScale;
     if (!scaleAttrPathCached.isEmpty()) {
         double s = 0.0;
-        if (readSysfsDouble(scaleAttrPathCached, s))
+        if (readSysfsDouble(scaleAttrPathCached, s) && std::isfinite(s) && s > 0.0) {
             scale = s;
+            lastGoodScale = s;  // 更新缓存
+        }  // 否则继续用 lastGoodScale
     }
+    // if (!std::isfinite(scale) || scale <= 0.0) {
+    //     scale = 0.0001875;  // 最终兜底（0.1875mV/LSB）
+    //     lastGoodScale = scale;
+    // }
 
-    // 3) 电压换算并发出
-    const double voltage = voltageFromRawAndScale(raw, scale);
-    emit newData(voltage);
+    // 3) 电压换算
+    double v = voltageFromRawAndScale(raw, scale);
 
-    // 4) 卡住检测计数
+    // // 4) 有限性检查 + 限频告警 + 使用 lastGoodValue 兜底
+    // if (!std::isfinite(v)) {
+    //     if ((invalidLogCounter++ % 20) == 0) {
+    //         qWarning() << "Ignored NaN/Inf value. raw=" << raw
+    //                    << " scale=" << scale
+    //                    << " 使用上次有效值 lastGoodValue=" << lastGoodValue;
+    //     }
+    //     v = lastGoodValue;
+    // }
+
+    // // 5) 滤波（滑动均值）
+    // v = applyMovingAverage(v);
+
+    // // 6) 再做一次有限性保护（极端情况下滤波也可能出 NaN）
+    // if (!std::isfinite(v)) {
+    //     if ((invalidLogCounter++ % 20) == 0) {
+    //         qWarning() << "Filtered value NaN/Inf，继续沿用 lastGoodValue=" << lastGoodValue;
+    //     }
+    //     v = lastGoodValue;
+    // }
+
+    // 7) 发布并更新 lastGoodValue
+    emit newData(v);
+    lastGoodValue = v;
+
+    // 8) 卡住检测计数
     if (lastRaw == raw)
         ++sameCount;
     else {
@@ -318,7 +379,7 @@ void IIOReaderThread::readIIODevice() {
         lastRaw = raw;
     }
 
-    // 5) 记录 emit 时间
+    // 9) 记录 emit 时间
     lastEmitTick.restart();
 }
 
@@ -332,7 +393,7 @@ void IIOReaderThread::watchdogTick() {
         timer->start(intervalMs_);
     }
 
-    // 连续相同值过多 or 过久未 emit → 恢复
+    // 连续相同值过多或过久未 emit → 恢复
     if (sameCount >= stallThreshold) {
         recoverSysfs();
         return;

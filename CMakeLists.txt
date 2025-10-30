@@ -46,6 +46,8 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/APP/ADS1115/inc)
 include_directories(${CMAKE_SOURCE_DIR}/APP/EM5820H/inc)
 include_directories(${CMAKE_SOURCE_DIR}/APP/libmodbus/include)
+include_directories(${CMAKE_SOURCE_DIR}/APP/modbus_rtu/inc)
+
 # -----------------------------------------------
 # 源文件与头文件
 # -----------------------------------------------
@@ -56,6 +58,8 @@ set(SOURCES
     APP/ADS1115/src/IIOReaderThread.cpp
     APP/EM5820H/src/PrinterManager.cpp
     APP/EM5820H/src/printerDeviceController.cpp
+    APP/modbus_rtu/src/ModbusWorkerThread.cpp
+    APP/modbus_rtu/src/MotorController.cpp
 )
 
 set(HEADERS
@@ -66,6 +70,9 @@ set(HEADERS
     APP/EM5820H/inc/printer_lib.h
     APP/EM5820H/inc/printer_type.h
     APP/EM5820H/inc/printerDeviceController.h
+    APP/libmodbus/include/modbus/modbus.h
+    APP/modbus_rtu/inc/ModbusWorkerThread.h
+    APP/modbus_rtu/inc/MotorController.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
