@@ -2,33 +2,46 @@
 
 #include <QDebug>
 
+#include "IIOReaderThread.h"
+
 IIODeviceController::IIODeviceController(QObject* parent)
     : QObject(parent) {
-    // 设备层 → 控制层 透传
-    connect(&reader, &IIOReaderThread::newDataBatch,
+    reader_ = new IIOReaderThread(this);
+    connect(reader_, &IIOReaderThread::newDataBatch,
             this, &IIODeviceController::newDataBatch);
 }
 
+IIODeviceController::~IIODeviceController() {
+    stop();
+}
+
+void IIODeviceController::setDeviceIndex(int idx) { devIndex_ = idx; }
+void IIODeviceController::setTargetHz(int hz) { targetHz_ = hz; }
+void IIODeviceController::setWatermark(int n) { watermark_ = n; }
+void IIODeviceController::setBufferLength(int n) { bufLen_ = n; }
+void IIODeviceController::setTriggerName(const QString& name) { trigName_ = name; }
+
 void IIODeviceController::start() {
-    qDebug() << "[IIODeviceController] start()";
-    // 缺省配置：50ms 一批、25 点/批（≈500Hz），无打印
-    reader.setDeviceIndex(0);
-    reader.setDesiredRateHz(500);
-    reader.setBatchPeriodMs(50);
-    reader.setSamplesPerBatch(25);
+    if (!reader_)
+        return;
+    reader_->setDeviceIndex(devIndex_);
+    reader_->setTargetHz(targetHz_);
+    reader_->setWatermark(watermark_);
+    reader_->setBufferLength(bufLen_);
+    if (!trigName_.isEmpty())
+        reader_->setTriggerName(trigName_);
 
-    // 默认开启滑动均值、关闭中值/EMA（你也可在 MainViewModel 覆盖）
-    reader.setBypassFiltering(false);
-    reader.setMovingAverage(true, 5);
-    reader.setMedianEnabled(false);
-    reader.setEma(false);
-
-    reader.setCalibrationEnabled(false);
-
-    reader.start();
+    if (!reader_->start()) {
+        emit logMessage("❌ IIO buffer/trigger 启动失败，请检查 trigger 与权限");
+    } else {
+        emit logMessage(QStringLiteral("✅ IIO 启动: %1Hz, watermark=%2, buf=%3")
+                            .arg(targetHz_)
+                            .arg(watermark_)
+                            .arg(bufLen_));
+    }
 }
 
 void IIODeviceController::stop() {
-    qDebug() << "[IIODeviceController] stop()";
-    reader.stop();
+    if (reader_)
+        reader_->stop();
 }
