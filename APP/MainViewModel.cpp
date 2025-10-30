@@ -2,20 +2,27 @@
 
 #include <QDebug>
 
+#include "ADS1115/inc/IIODeviceController.h"
+
 MainViewModel::MainViewModel(QObject* parent)
     : QObject(parent) {
-    // 采集数据转发给 QML
-    connect(&controller, &IIODeviceController::newData,
-            this, &MainViewModel::newData);
+    deviceController = new IIODeviceController(this);
+
+    // （可选）在此覆盖设备层滤波策略
+    deviceController->setBypassFiltering(false);  // 启用滤波链
+    deviceController->setMovingAverage(true, 5);  // 滑动平均窗口=5
+    deviceController->setMedianEnabled(false);    // 如需抗毛刺可设 true
+    deviceController->setEma(false);              // 如需再平滑可设 true
+
+    // 批数据透传至 QML
+    connect(deviceController, &IIODeviceController::newDataBatch,
+            this, &MainViewModel::newDataBatch);
 }
 
 void MainViewModel::startReading() {
-    // 50ms 轮询, 475Hz 采样, iio:device0
-    controller.start(50, 475, 0);
-    qInfo() << "开始采集：interval=50ms, rate=475Hz, device=iio:device0";
+    deviceController->start();
 }
 
 void MainViewModel::stopReading() {
-    controller.stop();
-    qInfo() << "停止采集";
+    deviceController->stop();
 }

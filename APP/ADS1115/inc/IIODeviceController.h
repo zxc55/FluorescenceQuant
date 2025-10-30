@@ -1,31 +1,40 @@
 #pragma once
 #include <QObject>
-#include <QThread>
+#include <QVector>
 
-class IIOReaderThread;
+#include "IIOReaderThread.h"
 
-/**
- * IIODeviceController
- * - 管理 IIOReaderThread 跑在独立 QThread 中
- * - 提供 start/stop 接口
- * - 将 worker 的 newData(double) 转发给 UI
- */
+// 设备层批数据 → 透传给上层（MainViewModel/QML）
 class IIODeviceController : public QObject {
     Q_OBJECT
 public:
     explicit IIODeviceController(QObject* parent = nullptr);
-    ~IIODeviceController();
 
-    // intervalMs: 轮询周期(ms)
-    // desiredRateHz: ADS1115 目标 ODR（比如 475）
-    // deviceIndex: 选择 iio:deviceX 的 X
-    void start(int intervalMs = 50, int desiredRateHz = 475, int deviceIndex = 0);
+public slots:
+    void start();
     void stop();
 
+    // ====== 转发配置（给 MainViewModel 调用）======
+    // 采样/批次
+    void setDeviceIndex(int idx) { reader.setDeviceIndex(idx); }
+    void setDesiredRateHz(int hz) { reader.setDesiredRateHz(hz); }
+    void setBatchPeriodMs(int ms) { reader.setBatchPeriodMs(ms); }
+    void setSamplesPerBatch(int count) { reader.setSamplesPerBatch(count); }
+
+    // 滤波
+    void setBypassFiltering(bool on) { reader.setBypassFiltering(on); }
+    void setMedianEnabled(bool on) { reader.setMedianEnabled(on); }
+    void setEma(bool enabled, double alpha = 0.25) { reader.setEma(enabled, alpha); }
+    void setMovingAverage(bool enabled, int w = 5) { reader.setMovingAverage(enabled, w); }
+
+    // 两点校准
+    void setCalibrationEnabled(bool on) { reader.setCalibrationEnabled(on); }
+    void setTwoPointCalib(double x1, double y1, double x2, double y2) { reader.setTwoPointCalib(x1, y1, x2, y2); }
+
 signals:
-    void newData(double value);
+    // 每 50ms 推送一批（~25 点），单位：伏
+    void newDataBatch(const QVector<double>& values);
 
 private:
-    QThread workerThread;
-    IIOReaderThread* worker{nullptr};
+    IIOReaderThread reader;
 };
