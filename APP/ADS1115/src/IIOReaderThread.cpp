@@ -67,7 +67,7 @@ bool IIOReaderThread::ensureSysfsReady() {
         qWarning() << "[IIO] 没有找到 /sys/bus/iio/devices/iio:deviceX";
         return false;
     }
-    devNode_ = devNodeFromDir(devDir_);
+    devNode_ = devNodeFromDir(devDir_);  // 获取该设备对应的 设备节点路径
     scanRoot_ = devDir_ + "/scan_elements";
     bufRoot_ = devDir_ + "/buffer";
     trigRoot_ = devDir_ + "/trigger";
