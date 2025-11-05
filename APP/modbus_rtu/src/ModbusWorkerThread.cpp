@@ -61,7 +61,7 @@ void ModbusWorkerThread::stop() {
 void ModbusWorkerThread::enqueue(const MotorCommand& cmd) {
     std::lock_guard<std::mutex> lock(mtx);
     cmdQueue.push(cmd);
-    cv.notify_one();
+    cv.notify_one();  // 唤醒当前在 cv 上等待（cv.wait(...)）的一个线程
 }
 
 void ModbusWorkerThread::threadFunc() {

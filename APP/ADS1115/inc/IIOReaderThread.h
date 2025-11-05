@@ -4,6 +4,7 @@
 #include <atomic>
 #include <string>
 #include <thread>
+#include <vector>
 
 class IIOReaderThread : public QObject {
     Q_OBJECT
@@ -16,6 +17,9 @@ public:
     void setWatermark(int n) { watermark_ = n; }
     void setBufferLength(int n) { bufLen_ = n; }
     void setTriggerName(const QString& name) { triggerName_ = name; }
+
+    // ✅ 新增：滑动平均滤波设置
+    void setMovingAverage(bool enabled, int window);
 
     bool start();
     void stop();
@@ -35,6 +39,7 @@ private:
     static bool fileExists(const QString& path);
 
 private:
+    // ========= 设备/采样配置 =========
     int deviceIndex_ = 0;
     int targetHz_ = 500;
     int watermark_ = 25;
@@ -53,4 +58,12 @@ private:
     QString scalePath_;
     double lastScale_ = 0.0625;  // mV/LSB
     bool configured_ = false;
+
+    // ========= 滤波状态（SMA）=========
+    bool maEnabled_ = true;
+    int maWindow_ = 5;           // 默认窗口=5
+    std::vector<double> maBuf_;  // 环形缓冲
+    int maIdx_ = 0;
+    int maCount_ = 0;
+    double maSum_ = 0.0;
 };

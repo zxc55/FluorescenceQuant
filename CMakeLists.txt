@@ -22,7 +22,7 @@ include(cmakes/GenerateRcc.cmake)
 
 # 如果 Qt 没有自动找到路径，可以手动指定
 list(APPEND CMAKE_PREFIX_PATH "${Qt5_DIR}")
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Charts QuickControls2 Widgets)
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Charts QuickControls2 Widgets QuickControls2)
 
 # 添加资源文件路径
 set(RESOURCE_DIR ${CMAKE_SOURCE_DIR}/resources)
@@ -97,12 +97,6 @@ else()
 
 endif()
 
-
-
-
-
-
-
 # -----------------------------------------------
 # 链接 Qt 库
 # -----------------------------------------------
@@ -114,4 +108,5 @@ target_link_libraries(FluorescenceQuant PRIVATE
   Qt5::Charts
   Qt5::QuickControls2
   Qt5::Widgets
+  Qt5::QuickControls2
 )

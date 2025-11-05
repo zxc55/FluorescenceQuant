@@ -81,7 +81,8 @@ bool IIOReaderThread::ensureSysfsReady() {
             if (ok && v > 0)
                 lastScale_ = v;
         }
-        qInfo() << "[IIO] scale =" << lastScale_ << (isMilliVoltScale(lastScale_) ? "(mV/LSB)" : "(V/LSB)");
+        qInfo() << "[IIO] scale =" << lastScale_
+                << (isMilliVoltScale(lastScale_) ? "(mV/LSB)" : "(V/LSB)");
     }
 
     {
@@ -139,11 +140,34 @@ void IIOReaderThread::teardownSysfs() {
     configured_ = false;
 }
 
+// ✅ 新增：设置滑动平均（线程不安全但通常在 start 前调用；如需运行时修改可加互斥）
+void IIOReaderThread::setMovingAverage(bool enabled, int window) {
+    maEnabled_ = enabled;
+    if (window < 1)
+        window = 1;
+    maWindow_ = window;
+
+    // 立即重置缓冲，避免窗口改变导致历史累积错误
+    maBuf_.assign(maWindow_, 0.0);
+    maIdx_ = 0;
+    maCount_ = 0;
+    maSum_ = 0.0;
+
+    qInfo() << "[ADC] MovingAverage" << (maEnabled_ ? "启用" : "禁用")
+            << " 窗口=" << maWindow_;
+}
+
 bool IIOReaderThread::start() {
     if (running_.load())
         return true;
     if (!ensureSysfsReady())
         return false;
+
+    // 初始化 SMA 状态（确保第一次运行是干净的）
+    maBuf_.assign(maWindow_, 0.0);
+    maIdx_ = 0;
+    maCount_ = 0;
+    maSum_ = 0.0;
 
     fd_ = ::open(devNode_.toLocal8Bit().constData(), O_RDONLY);
     if (fd_ < 0) {
@@ -163,7 +187,8 @@ bool IIOReaderThread::start() {
     worker_ = std::thread(&IIOReaderThread::threadMain, this);
     qInfo() << "[IIO] buffer/trigger 采集启动: dev=" << devNode_
             << " Hz=" << targetHz_ << " watermark=" << watermark_
-            << " length=" << bufLen_;
+            << " length=" << bufLen_
+            << " SMA=" << (maEnabled_ ? "on" : "off") << "/" << maWindow_;
     return true;
 }
 
@@ -223,7 +248,25 @@ void IIOReaderThread::threadMain() {
         for (int i = 0; i < samples; ++i) {
             const unsigned char* p = reinterpret_cast<unsigned char*>(buf.data()) + i * bytesPerSample;
             int16_t raw = (int16_t)(p[0] | (p[1] << 8));
-            batch.push_back(double(raw) * k);
+            double v = double(raw) * k;
+
+            // ✅ 应用滑动平均滤波（SMA）
+            if (maEnabled_) {
+                if (maCount_ < maWindow_) {
+                    maBuf_[maIdx_] = v;
+                    maSum_ += v;
+                    maIdx_ = (maIdx_ + 1) % maWindow_;
+                    ++maCount_;
+                } else {
+                    maSum_ -= maBuf_[maIdx_];
+                    maBuf_[maIdx_] = v;
+                    maSum_ += v;
+                    maIdx_ = (maIdx_ + 1) % maWindow_;
+                }
+                v = maSum_ / double(maCount_);
+            }
+
+            batch.push_back(v);
         }
 
         if (!batch.empty()) {

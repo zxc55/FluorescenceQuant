@@ -28,6 +28,7 @@ void IIODeviceController::start() {
     reader_->setTargetHz(targetHz_);
     reader_->setWatermark(watermark_);
     reader_->setBufferLength(bufLen_);
+    reader_->setMovingAverage(true, 10);
     if (!trigName_.isEmpty())
         reader_->setTriggerName(trigName_);
 
