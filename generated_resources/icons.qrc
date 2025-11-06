@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file>resources/icons/card_test.svg</file>
+    <file>resources/icons/test-tube-line.png</file>
+  </qresource>
+</RCC>

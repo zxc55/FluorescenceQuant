@@ -91,9 +91,9 @@ void PrinterManager::testSettings() {
     if (!ret.result)
         qDebug() << "current language:" << ret.data.value;
 
-    printer->setting()->assign_string(Machine_Name, "荧光定量检测", &ret, 500);
-    if (!ret.result)
-        qDebug() << "machine name:" << ret.data.string;
+    // printer->setting()->assign_string(Machine_Name, "荧光定量检测", &ret, 500);
+    // if (!ret.result)
+    //     qDebug() << "machine name:" << ret.data.string;
 
     printer->setting()->query(Print_Usage_Record, &ret, 500);
     if (!ret.result) {
@@ -134,20 +134,20 @@ void PrinterManager::testText() {
 
 // ---------------- 打印二维码 ----------------
 void PrinterManager::testQRCode() {
-    printer->qr_code()
-        ->align(ALIGN_RIGHT)
-        ->set("https://www.bilibili.com/", 5, QR_ECC_H)
-        ->print();
+    // printer->qr_code()
+    //     ->align(ALIGN_RIGHT)
+    //     ->set("https://www.bilibili.com/", 5, QR_ECC_H)
+    //     ->print();
 }
 
 // ---------------- 打印条形码 ----------------
 void PrinterManager::testBarcode() {
-    printer->bar_code()
-        ->align(ALIGN_CENTER)
-        ->set(BAR_UPC_A, "123456789005", 2, 100, ABOVE_AND_BELOW)
-        ->print();
-    printer->text()->newline();
-    qDebug() << "printer " << printer;
+    // printer->bar_code()
+    //     ->align(ALIGN_CENTER)
+    //     ->set(BAR_UPC_A, "123456789005", 2, 100, ABOVE_AND_BELOW)
+    //     ->print();
+    // printer->text()->newline();
+    // qDebug() << "printer " << printer;
 }
 
 // ---------------- 卸载 ----------------
