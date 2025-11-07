@@ -105,7 +105,8 @@ set(SOURCES
     APP/sqlite/Repo/src/UsersRepo.cpp
     APP/sqlite/VM/src/SettingsViewModel.cpp
     APP/sqlite/VM/src/UserViewModel.cpp
-
+    APP/sqlite/Repo/src/ProjectsRepo.cpp
+    APP/sqlite/VM/src/ProjectsViewModel.cpp
 )
 
 set(HEADERS
@@ -130,6 +131,8 @@ set(HEADERS
     APP/sqlite/Repo/inc/UsersRepo.h
     APP/sqlite/VM/inc/SettingsViewModel.h
     APP/sqlite/VM/inc/UserViewModel.h
+    APP/sqlite/Repo/inc/ProjectsRepo.h
+    APP/sqlite/VM/inc/ProjectsViewModel.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
@@ -143,6 +146,7 @@ target_include_directories(FluorescenceQuant PRIVATE
     ${CMAKE_SOURCE_DIR}/APP/sqlite/DB/inc
     ${CMAKE_SOURCE_DIR}/APP/sqlite/VM/inc
     ${CMAKE_SOURCE_DIR}/APP/sqlite/Repo/inc
+    ${CMAKE_SOURCE_DIR}/APP
 )
 
 if(${TARGET_BOARD} STREQUAL "全志T113-S3")

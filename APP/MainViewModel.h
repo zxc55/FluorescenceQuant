@@ -1,4 +1,6 @@
-#pragma once
+#ifndef MAINVIEWMODEL_H_
+#define MAINVIEWMODEL_H_
+
 #include <QObject>
 #include <QVector>
 
@@ -20,3 +22,4 @@ signals:
 private:
     IIODeviceController* deviceController{nullptr};
 };
+#endif  // MAINVIEWMODEL_H_

@@ -26,3 +26,10 @@ struct UserRow {
     QString note;  // 备注
 };
 Q_DECLARE_METATYPE(UserRow)
+struct ProjectRow {
+    int id = 0;
+    QString name;       // 项目名称
+    QString batch;      // 批次编码
+    QString updatedAt;  // 更新时间（文本，yyyy-MM-dd HH:mm:ss）
+};
+Q_DECLARE_METATYPE(ProjectRow)
