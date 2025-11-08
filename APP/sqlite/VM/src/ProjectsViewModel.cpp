@@ -24,31 +24,31 @@ bool ProjectsViewModel::openDatabase() {
 }
 
 void ProjectsViewModel::loadData() {
-    beginResetModel();
+    beginResetModel();  // 用来通知 QML 或 View（比如 ListView、Repeater 等）：⚠️ 我的整个模型数据要被重新加载或清空了！
     m_list.clear();
 
     if (!m_db.isOpen())
         openDatabase();
 
-    QSqlQuery query(m_db);
+    QSqlQuery query(m_db);  // 在数据库连接 m_db 上创建一个 SQL 查询对象。m_db 必须是一个已打开的数据库连接。
     // ✅ 使用你的实际字段名
-    query.prepare("SELECT id, name, batch, updated_at FROM projects ORDER BY id ASC");
+    query.prepare("SELECT id, name, batch, updated_at FROM projects ORDER BY id ASC");  // 准备好一条 SQL 语句（相当于预编译 SQL 命令）。Qt 会检查语法。
 
-    if (!query.exec()) {
+    if (!query.exec()) {  // 执行这条 SQL 查询语句。只有 exec() 后才会真正访问数据库。
         qWarning() << "❌ 查询失败:" << query.lastError().text();
     } else {
-        while (query.next()) {
+        while (query.next()) {  // 遍历数据库查询结果。每次循环读取一行数据。如果还有下一行返回 true，否则 false。
             ProjectItem item;
             item.rid = query.value(0).toInt();           // id
             item.name = query.value(1).toString();       // name
             item.batch = query.value(2).toString();      // batch
             item.updatedAt = query.value(3).toString();  // updated_at
-            m_list.append(item);
+            m_list.append(item);                         // 把当前行的数据追加到 m_list 里。
         }
         qDebug() << "✅ 加载数据条数:" << m_list.size();
     }
 
-    endResetModel();
+    endResetModel();  // 告诉视图：数据加载完成，刷新显示
     emit countChanged();
 }
 
