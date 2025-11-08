@@ -193,6 +193,29 @@ WHERE IFNULL(updated_at,'')='' OR
             return false;
     }
 
+    {
+        // 6) project_info（项目信息表）
+        if (!execOne(q, R"SQL(
+CREATE TABLE IF NOT EXISTS project_info(
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id        INTEGER NOT NULL,                              -- 外键：对应 projects.id
+    sample_no         TEXT NOT NULL DEFAULT '',                       -- 样品编号
+    sample_source     TEXT NOT NULL DEFAULT '',                       -- 样品来源
+    sample_name       TEXT NOT NULL DEFAULT '',                       -- 样品名称
+    standard_curve    TEXT NOT NULL DEFAULT '',                       -- 标准曲线（仅允许：粮食谷物 / 加工副产物 / 配合饲料）
+    batch_code        TEXT NOT NULL DEFAULT '',                       -- 批次编码
+    detected_conc     REAL NOT NULL DEFAULT 0.0,                       -- 检测浓度
+    reference_value   REAL NOT NULL DEFAULT 0.0,                       -- 参考值
+    result            TEXT NOT NULL DEFAULT '',                        -- 检测结论（合格 / 超标）
+    detected_time     TEXT NOT NULL DEFAULT (datetime('now','localtime')),  -- 检测时间
+    detected_unit     TEXT NOT NULL DEFAULT 'μg/kg',                   -- 检测单位
+    detected_person   TEXT NOT NULL DEFAULT '',                        -- 检测人员
+    dilution_info     TEXT NOT NULL DEFAULT '1倍',                     -- 超曲线范围稀释倍数（1倍 / 5倍）
+    FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+)SQL"))
+            return false;
+    }
     qInfo() << "[MIGRATE] v1 done";
     return true;
 }

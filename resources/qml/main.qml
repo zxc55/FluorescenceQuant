@@ -61,11 +61,12 @@ ApplicationWindow {
     // 键盘面板
     InputPanel {
         id: panel
-        z: 100
+        z: 9999
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         visible: Qt.inputMethod.visible
+        parent: win
     }
 
     // 顶部栏
@@ -116,7 +117,7 @@ ApplicationWindow {
         anchors {
             left: parent.left; right: parent.right
             top: topBar.bottom; bottom: parent.bottom
-            bottomMargin: kbHeight
+           // bottomMargin: kbHeight
         }
         spacing: 0
 
@@ -291,18 +292,214 @@ ApplicationWindow {
                     anchors.margins: 18
                     currentIndex: currentPage
 
-                    // 0 样品检测（占位）
-                    Item {
-                        ColumnLayout {
-                            anchors.fill: parent; spacing: 12
-                            Label { text: "样品检测"; font.pixelSize: 24; color: textMain }
-                            Rectangle {
-                                Layout.fillWidth: true; Layout.fillHeight: true
-                                radius: radiusS; color: "#fafafa"; border.color: line
-                                Label { anchors.centerIn: parent; text: "这里放样品检测界面内容"; color: textSub }
+// ==========================
+// 样品检测界面右侧
+// ==========================
+Item {
+    id: sampleTestPage
+    anchors.fill: parent
+    Column {
+        anchors.fill: parent
+        spacing: 10
+
+        // ===== 第一块：项目检测结果表格 =====
+        Rectangle {
+            id: resultTable
+            width: parent.width
+            height: 44 * 5
+            radius: 8
+            color: "#ffffff"
+            border.color: "#cfd6e2"
+            border.width: 1
+            clip: true
+
+            Column {
+                anchors.fill: parent
+
+                // === 表头 ===
+                Rectangle {
+                    id: resultHeader
+                    width: parent.width
+                    height: 44
+                    color: "#e6e8ec"
+                    border.color: "#c0c0c0"
+                    Row {
+                        anchors.fill: parent
+                        spacing: 8
+                        Label { text: "项目名称"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                        Label { text: "浓度(μg/kg)"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                        Label { text: "结论"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                        Label { text: "参考值(μg/kg)"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                    }
+                }
+
+                // === 内容区 ===
+                Flickable {
+                    id: resultFlick
+                    anchors.top: resultHeader.bottom
+                    width: parent.width
+                    height: 44 * 4
+                    contentHeight: resultColumn.height
+                    clip: true
+
+                    Column {
+                        id: resultColumn
+                        width: parent.width
+
+                        // ✅ 这里以后可以替换成 C++ 模型，暂时固定3行演示
+                        Repeater {
+                            model: 3
+                            delegate: Rectangle {
+                                width: parent.width
+                                height: 44
+                                color: index % 2 === 0 ? "#ffffff" : "#f9fafb"
+                                border.color: "#e5e7eb"
+                                border.width: 1
+                                Row {
+                                    anchors.fill: parent
+                                    spacing: 8
+                                    Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                    Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                    Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                    Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                }
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // ===== 第二块：按钮 =====
+        Row {
+            width: parent.width
+            height: 50
+            spacing: 20
+            Button {
+                text: "样品信息";
+                width: (parent.width - 40) / 3 
+                onClicked: sampleInfoPopup.visible = true
+            }
+            Button { text: "详细信息"; width: (parent.width - 40) / 3 }
+            Button { text: "打印"; width: (parent.width - 40) / 3 }
+        }
+        Rectangle { height: 6; color: "transparent" } 
+        // ===== 第三块：样品信息表格（带表头） =====
+        Rectangle {
+            id: singleRowTable
+            width: parent.width
+            height: 44 * 2
+            radius: 8
+            color: "#ffffff"
+            border.color: "#cfd6e2"
+            border.width: 1
+            clip: false
+
+            Column {
+                anchors.fill: parent
+                spacing: 0
+                // === 表头 ===
+                Rectangle {
+                    id: sampleHeader
+                    width: parent.width
+                    height: 44
+                    color: "#e6e8ec"
+                    border.color: "#c0c0c0"
+                    Row {
+                        anchors.fill: parent
+                        spacing: 8
+                        Label { text: "样品编号"; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                        Label { text: "项目名称"; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                        Label { text: "批次编码"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                        Label { text: "测试时间"; width: 300; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                    }
+                }
+
+                // === 内容行 ===
+                Rectangle {
+                    width: parent.width
+                    height: 44
+                    color: "#ffffff"
+                    border.color: "#e5e7eb"
+                    border.width: 1
+                    Row {
+                        anchors.fill: parent
+                        spacing: 8
+                        Label { text: ""; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                        Label { text: projectsVm.getNameById(projectPage.selectedId); width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                        Label { text: projectsVm.getBatchById(projectPage.selectedId); width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                        Label { text: Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm"); width: 300; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                }
+            }
+        }
+
+            // ===== 第四块：选择框（带标题） =====
+            Row {
+                width: parent.width
+                height: 100                // ✅ 高度稍微增加，容纳标题文字
+                spacing: 40
+                anchors.topMargin: 8
+
+                // === 标准曲线选择 ===
+                Column {
+                    spacing: 6
+                    width: 220
+                    Label {
+                        text: "标准曲线选择"
+                        font.pixelSize: 18
+                        color: textMain
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    ComboBox {
+                        width: parent.width
+                        model: ["粮食谷物", "加工副产物", "配合饲料"]
+                        currentIndex: 0
+                        font.pixelSize: 18
+                    }
+                }
+
+                // === 超曲线范围稀释 ===
+                Column {
+                    spacing: 6
+                    width: 220
+                    Label {
+                        text: "超曲线范围稀释"
+                        font.pixelSize: 18
+                        color: textMain
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    ComboBox {
+                        width: parent.width
+                        model: ["1", "5"]
+                        currentIndex: 0
+                        font.pixelSize: 18
+                    }
+                }
+
+                // === 参考值选择 ===
+                Column {
+                    spacing: 6
+                    width: 220
+                    Label {
+                        text: "参考值选择"
+                        font.pixelSize: 18
+                        color: textMain
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    TextField {
+                        width: parent.width
+                        placeholderText: "参考值(μg/kg)"
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                        font.pixelSize: 18
+                    }
+                }
+            }
+
+    }
+}
+
+
 
                     // 1 项目管理（使用 ListView + header，消除表头与首行之间空白）
 // ===== 1 项目管理（带滑动表格） =====
@@ -637,4 +834,210 @@ Repeater {
             }
         }
     }
+
+// ===== 样品信息弹窗（优化排版版） =====
+Rectangle {
+    id: sampleInfoPopup
+    anchors.fill: parent
+    visible: false
+    color: "#80000000"          // 半透明黑背景
+    z: 9998                     // 稍低于键盘（键盘 z=9999）
+    focus: true
+
+    // === 弹窗主体 ===
+    Rectangle {
+        id: popupBox
+        width: 620
+        height: 460
+        radius: 12
+        color: "#ffffff"
+        border.color: "#cfd6e2"
+        anchors.centerIn: parent
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 16
+
+            // === 顶部标题栏 ===
+            Rectangle {
+                id: titleBar
+                Layout.fillWidth: true
+                height: 50
+                radius: 8
+                color: "#3a7afe"
+
+                Label {
+                    text: "样品信息"
+                    anchors.centerIn: parent
+                    color: "white"
+                    font.pixelSize: 22
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+
+            Rectangle { height: 1; color: "#e5e7eb"; Layout.fillWidth: true }
+
+            // === 表单区 ===
+            GridLayout {
+                id: formGrid
+                columns: 2
+                columnSpacing: 25
+                rowSpacing: 18
+                Layout.fillWidth: true
+                Layout.topMargin: 10
+
+                // 自动生成样品编号
+                property string sampleId: {
+                    let date = new Date()
+                    let yyyy = date.getFullYear()
+                    let mm = ("0" + (date.getMonth() + 1)).slice(-2)
+                    let dd = ("0" + date.getDate()).slice(-2)
+                    let seq = ("000" + Math.floor(Math.random() * 9999)).slice(-4)
+                    return yyyy + mm + dd + seq
+                }
+
+                // 左列 Label 右对齐，右列 TextField 填满
+                Label {
+                    text: "样品编号："
+                    font.pixelSize: 18
+                    color: textMain
+                    horizontalAlignment: Text.AlignRight
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                }
+                TextField {
+                    id: tfSampleId
+                    text: formGrid.sampleId
+                    font.pixelSize: 18
+                    placeholderText: "请输入样品编号"
+                    Layout.fillWidth: true
+                }
+
+                Label {
+                    text: "样品名称："
+                    font.pixelSize: 18
+                    color: textMain
+                    horizontalAlignment: Text.AlignRight
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                }
+                TextField {
+                    id: tfSampleName
+                    font.pixelSize: 18
+                    placeholderText: "请输入样品名称"
+                    Layout.fillWidth: true
+                }
+
+                Label {
+                    text: "样品来源："
+                    font.pixelSize: 18
+                    color: textMain
+                    horizontalAlignment: Text.AlignRight
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                }
+                TextField {
+                    id: tfSampleSource
+                    font.pixelSize: 18
+                    placeholderText: "请输入样品来源"
+                    Layout.fillWidth: true
+                }
+
+                Label {
+                    text: "检测单位："
+                    font.pixelSize: 18
+                    color: textMain
+                    horizontalAlignment: Text.AlignRight
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                }
+                TextField {
+                    id: tfLab
+                    font.pixelSize: 18
+                    placeholderText: "请输入检测单位"
+                    Layout.fillWidth: true
+                }
+
+                Label {
+                    text: "检测人员："
+                    font.pixelSize: 18
+                    color: textMain
+                    horizontalAlignment: Text.AlignRight
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                }
+                TextField {
+                    id: tfOperator
+                    font.pixelSize: 18
+                    placeholderText: "请输入检测人员"
+                    Layout.fillWidth: true
+                }
+            }
+
+            Rectangle { height: 1; color: "#e5e7eb"; Layout.fillWidth: true }
+
+            // === 按钮区 ===
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 0       // ✅ 代替 topPadding
+                spacing: 20
+
+                Button {
+                    text: "清空"
+                    width: 120
+                    height: 44
+                    onClicked: {
+                        tfSampleId.text = formGrid.sampleId
+                        tfSampleName.text = ""
+                        tfSampleSource.text = ""
+                        tfLab.text = ""
+                        tfOperator.text = ""
+                    }
+                }
+
+                Button {
+                    text: "完成"
+                    width: 120
+                    height: 44
+                    onClicked: {
+                        console.log("完成：", tfSampleId.text, tfSampleName.text,
+                                    tfSampleSource.text, tfLab.text, tfOperator.text)
+                        sampleInfoPopup.visible = false
+                    }
+                }
+
+                Button {
+                    text: "取消"
+                    width: 120
+                    height: 44
+                    onClicked: sampleInfoPopup.visible = false
+                }
+            }
+
+        }
+    }
+
+    // === 背景点击关闭逻辑 ===
+    MouseArea {
+        anchors.fill: parent
+        propagateComposedEvents: false
+        z: -1
+        onClicked: {
+            var local = mapToItem(popupBox, mouse.x, mouse.y)
+            if (local.x < 0 || local.y < 0 || local.x > popupBox.width || local.y > popupBox.height) {
+                sampleInfoPopup.visible = false
+            }
+        }
+    }
+
+    // === 内层阻止冒泡，但允许内部控件响应 ===
+    MouseArea {
+        anchors.fill: popupBox
+        propagateComposedEvents: true
+        acceptedButtons: Qt.NoButton
+    }
 }
+
+
+
+}
+ 

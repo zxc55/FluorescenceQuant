@@ -119,3 +119,20 @@ QVariantMap ProjectsViewModel::get(int index) const {
     map["updatedAt"] = item.updatedAt;
     return map;
 }
+// ✅ 通过项目ID获取项目名称
+QString ProjectsViewModel::getNameById(int id) const {
+    for (const auto& item : m_list) {
+        if (item.rid == id)
+            return item.name;
+    }
+    return "";
+}
+
+// ✅ 通过项目ID获取批次编码
+QString ProjectsViewModel::getBatchById(int id) const {
+    for (const auto& item : m_list) {
+        if (item.rid == id)
+            return item.batch;
+    }
+    return "";
+}

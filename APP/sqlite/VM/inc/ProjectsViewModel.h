@@ -44,6 +44,10 @@ public:
     Q_INVOKABLE void deleteById(int rid);          // 删除指定 ID
     Q_INVOKABLE QVariantMap get(int index) const;  // 获取某一行内容
 
+    // ✅ 新增接口：供 QML 调用，按 ID 查找项目名称和批次
+    Q_INVOKABLE QString getNameById(int id) const;
+    Q_INVOKABLE QString getBatchById(int id) const;
+
 signals:
     void countChanged();  // 通知 QML 行数变化
 
