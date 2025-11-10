@@ -48,6 +48,9 @@ public:
     Q_INVOKABLE QString getNameById(int id) const;
     Q_INVOKABLE QString getBatchById(int id) const;
 
+    // ✅ 新增接口：写入 project_info 表
+    Q_INVOKABLE bool insertProjectInfo(const QVariantMap& info);
+
 signals:
     void countChanged();  // 通知 QML 行数变化
 

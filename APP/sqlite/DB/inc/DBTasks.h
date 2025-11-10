@@ -1,8 +1,8 @@
 #pragma once
 #include <QString>
+#include <QVariantMap>
 
 #include "DTO.h"
-
 enum class DBTaskType {
     EnsureAllSchemas,
     LoadSettings,
@@ -14,7 +14,10 @@ enum class DBTaskType {
     ResetPassword,
     // —— 项目 —— //
     LoadProjects,
-    DeleteProject
+    DeleteProject,
+    // —— 历史记录 —— //
+    LoadHistory,
+    InsertHistory
 };
 
 struct DBTask {
@@ -24,7 +27,8 @@ struct DBTask {
     int p1 = 0;
     QString s1, s2, s3, s4;
     AppSettingsRow settings;
-
+    QVariantMap info;  // ✅ 新增字段：用于历史记录插入数据
+    HistoryRow history;
     // 便捷构造
     static DBTask ensureAll() {
         DBTask t;
@@ -88,6 +92,21 @@ struct DBTask {
         DBTask t;
         t.type = DBTaskType::DeleteProject;
         t.p1 = id;
+        return t;
+    }
+    // =====================
+    // 历史记录任务
+    // =====================
+    static DBTask loadHistory() {
+        DBTask t;
+        t.type = DBTaskType::LoadHistory;
+        return t;
+    }
+
+    static DBTask insertHistory(const HistoryRow& row) {
+        DBTask t;
+        t.type = DBTaskType::InsertHistory;
+        t.history = row;  // ✅ 直接存结构体
         return t;
     }
 };

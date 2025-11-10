@@ -107,6 +107,8 @@ set(SOURCES
     APP/sqlite/VM/src/UserViewModel.cpp
     APP/sqlite/Repo/src/ProjectsRepo.cpp
     APP/sqlite/VM/src/ProjectsViewModel.cpp
+    APP/sqlite/VM/src/HistoryViewModel.cpp
+    APP/sqlite/Repo/src/HistoryRepo.cpp
 )
 
 set(HEADERS
@@ -133,6 +135,8 @@ set(HEADERS
     APP/sqlite/VM/inc/UserViewModel.h
     APP/sqlite/Repo/inc/ProjectsRepo.h
     APP/sqlite/VM/inc/ProjectsViewModel.h
+    APP/sqlite/VM/inc/HistoryViewModel.h
+    APP/sqlite/Repo/inc/HistoryRepo.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}

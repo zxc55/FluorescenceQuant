@@ -130,6 +130,21 @@ void DBWorker::initialize() {
                 emit projectDeleted(ok, task.p1);
                 break;
             }
+
+            case DBTaskType::LoadHistory: {
+                QVector<HistoryRow> rows;
+                QSqlDatabase db = QSqlDatabase::database(connName_);
+                bool ok = HistoryRepo::selectAll(db, rows);
+                emit historyLoaded(rows);
+                break;
+            }
+            case DBTaskType::InsertHistory: {
+                QSqlDatabase db = QSqlDatabase::database(connName_);
+                bool ok = HistoryRepo::insert(db, task.history);
+                emit historyInserted(ok);
+                break;
+            }
+
             default:
                 qWarning() << "[DB] unknown task:" << int(task.type);
                 break;
@@ -364,4 +379,17 @@ bool DBWorker::deleteProjectInternal(int id) {
         return false;
     }
     return ProjectsRepo::deleteById(db, id);
+}
+void DBWorker::postLoadHistory() {
+    std::lock_guard<std::mutex> lk(m_);
+    q_.push(DBTask::loadHistory());
+    cv_.notify_one();
+}
+
+void DBWorker::postInsertHistory(const HistoryRow& row) {
+    {
+        std::lock_guard<std::mutex> lk(m_);
+        q_.push(DBTask::insertHistory(row));
+    }
+    cv_.notify_one();
 }

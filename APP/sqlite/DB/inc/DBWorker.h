@@ -11,6 +11,7 @@
 
 #include "DBTasks.h"
 #include "DTO.h"
+#include "HistoryRepo.h"
 
 class DBWorker : public QObject {
     Q_OBJECT
@@ -36,6 +37,9 @@ public:
     // **项目**
     Q_INVOKABLE void postLoadProjects();
     Q_INVOKABLE void postDeleteProject(int id);
+    // *History**
+    Q_INVOKABLE void postLoadHistory();
+    Q_INVOKABLE void postInsertHistory(const HistoryRow& row);
 
 signals:
     void ready();
@@ -55,6 +59,9 @@ signals:
     // **projects**
     void projectsLoaded(const QVector<ProjectRow>& rows);
     void projectDeleted(bool ok, int id);
+    // *History**
+    void historyLoaded(const QVector<HistoryRow>& rows);
+    void historyInserted(bool ok);
 
 private:
     // 线程主循环

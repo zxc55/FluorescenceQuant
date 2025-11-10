@@ -13,5 +13,7 @@ bool selectAll(QSqlDatabase& db, QVector<ProjectRow>& rows);
 
 // 按 id 删除一条
 bool deleteById(QSqlDatabase& db, int id);
+// === 新增：插入检测信息记录（project_info） ===
+bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data);
 
 }  // namespace ProjectsRepo

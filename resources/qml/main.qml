@@ -15,9 +15,9 @@ ApplicationWindow {
     font.family: "Microsoft YaHei"   // 字体（根据系统可用字体调整）
     font.bold: true                  // 全部加粗
     font.pixelSize: 20               // 默认字号
-    ProjectsViewModel {
-    id: projectsVm
-}
+//     ProjectsViewModel {
+//     id: projectsVm
+// }
     // ===== 主题 / 常量 =====
     readonly property color  brand:      "#3a7afe"
     readonly property color  textMain:   "#1f2937"
@@ -203,7 +203,40 @@ ApplicationWindow {
                     width: parent ? parent.width : 180
                     height: sideBar.tileH
                     padding: 0
-                    onClicked: console.log("开始检测")
+                    onClicked:{ 
+                        console.log("开始检测")
+                                    // === 组装要写入数据库的记录 ===
+                    var record = {
+                        project_id: projectPage.selectedId,
+                        sample_no: tfSampleId.text,
+                        sample_source: tfSampleSource.text,
+                        sample_name: tfSampleName.text,
+                        standard_curve: standardCurveBox.currentText,
+                        batch_code: projectsVm.getBatchById(projectPage.selectedId),
+                        detected_conc: 0.0, // 检测开始时为0
+                        reference_value: parseFloat(refValueField.text || 0.0),
+                        result: "", // 检测完成后更新
+                        detected_time: Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss"),
+                        detected_unit: "μg/kg",
+                        detected_person: tfOperator.text,
+                        dilution_info: dilutionBox.currentText
+                    }
+
+                    console.log("[DEBUG] 即将写入数据库:", JSON.stringify(record))
+                    var ok = projectsVm.insertProjectInfo(record)
+                    console.log(ok ? "[DB] 插入成功 ✅" : "[DB] 插入失败 ❌")
+
+                    if (ok) {
+                        overlayText = "检测开始..."
+                        overlayBusy = true
+                        overlayVisible = true
+                        Qt.callLater(() => {
+                            overlayBusy = false
+                            overlayText = "检测结束"
+                            Qt.callLater(() => overlayVisible = false, 2000)
+                        })
+                    }
+                    }
                     background: Rectangle {
                         anchors.fill: parent; radius: 10
                         gradient: Gradient {
@@ -324,7 +357,8 @@ Item {
                     color: "#e6e8ec"
                     border.color: "#c0c0c0"
                     Row {
-                        anchors.fill: parent
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
                         spacing: 8
                         Label { text: "项目名称"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
                         Label { text: "浓度(μg/kg)"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
@@ -436,6 +470,7 @@ Item {
 
             // ===== 第四块：选择框（带标题） =====
             Row {
+                id: paramSelectRow
                 width: parent.width
                 height: 100                // ✅ 高度稍微增加，容纳标题文字
                 spacing: 40
@@ -452,6 +487,7 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                     }
                     ComboBox {
+                        id: standardCurveBox
                         width: parent.width
                         model: ["粮食谷物", "加工副产物", "配合饲料"]
                         currentIndex: 0
@@ -470,6 +506,7 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                     }
                     ComboBox {
+                        id: dilutionBox
                         width: parent.width
                         model: ["1", "5"]
                         currentIndex: 0
@@ -488,6 +525,7 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                     }
                     TextField {
+                        id: refValueField
                         width: parent.width
                         placeholderText: "参考值(μg/kg)"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
@@ -780,31 +818,185 @@ Repeater {
     }
 }
 
-                    // 2 历史记录（占位）
-                    Item {
-                        ColumnLayout {
-                            anchors.fill: parent; spacing: 12
-                            Label { text: "历史记录"; font.pixelSize: 24; color: textMain }
-                            Rectangle {
-                                Layout.fillWidth: true; Layout.fillHeight: true
-                                radius: radiusS; color: "#fafafa"; border.color: line
-                                Label { anchors.centerIn: parent; text: "这里放历史记录内容"; color: textSub }
-                            }
-                        }
-                    }
+// ===== 2 历史记录（最终 ListView 版：Qt 5.12 稳定显示）=====
+// ===== 2 历史记录（单文件版，左右可滑，表头同步） =====
+Rectangle {
+    id: historyPage
+    anchors.fill: parent
+    color: "#ffffff"
 
-                    // 3 系统设置（占位）
-                    Item {
-                        ColumnLayout {
-                            anchors.fill: parent; spacing: 12
-                            Label { text: "系统设置"; font.pixelSize: 24; color: textMain }
-                            Rectangle {
-                                Layout.fillWidth: true; Layout.fillHeight: true
-                                radius: radiusS; color: "#fafafa"; border.color: line
-                                Label { anchors.centerIn: parent; text: "这里放系统设置内容"; color: textSub }
+    // —— 列宽定义（放在最外层，下面统一用 historyPage.前缀）——
+    property int w_id: 60
+    property int w_pid: 80
+    property int w_no: 130
+    property int w_src: 130
+    property int w_name: 150
+    property int w_curve: 130
+    property int w_batch: 130
+    property int w_conc: 100
+    property int w_ref: 100
+    property int w_res: 80
+    property int w_time: 180
+    property int w_unit: 80
+    property int w_person: 100
+    property int w_dilution: 90
+    property int totalWidth: historyPage.w_id + historyPage.w_pid + historyPage.w_no + historyPage.w_src +
+                             historyPage.w_name + historyPage.w_curve + historyPage.w_batch +
+                             historyPage.w_conc + historyPage.w_ref + historyPage.w_res +
+                             historyPage.w_time + historyPage.w_unit + historyPage.w_person +
+                             historyPage.w_dilution + (16 * 13)   // 13 个间距
+
+    Column {
+        // 不用 anchors.fill，换成 width/height，避免 Column 警告
+        width: parent.width
+        height: parent.height
+        spacing: 8
+
+        // === 标题行 ===
+        Row {
+            width: parent.width
+            height: 50
+            spacing: 12
+
+            Label {
+                text: "历史记录"
+                font.pixelSize: 24
+                font.bold: true
+                color: "#000000"
+                verticalAlignment: Text.AlignVCenter
+            }
+            // 占位拉伸：Row 不是 Layout，用一个弹性 Item
+            Item { width: Math.max(0, parent.width - 240) ; height: 1 }
+            Button { text: "刷新"; onClicked: historyVm.refresh() }
+        }
+
+        // === 表格主体 ===
+        Rectangle {
+            width: parent.width
+            height: parent.height - 60
+            radius: 6
+            color: "#ffffff"
+            border.color: "#cccccc"
+            border.width: 1
+            clip: true
+
+            // === 表头（横向可滑） ===
+            Rectangle {
+                id: historyHeaderBar
+                width: parent.width
+                height: 48
+                color: "#f3f4f6"
+                border.color: "#cccccc"
+                border.width: 1
+                z: 2
+
+                Flickable {
+                    id: headerFlick
+                    width: parent.width
+                    height: parent.height
+                    contentWidth: historyPage.totalWidth
+                    contentHeight: height
+                    flickableDirection: Flickable.HorizontalFlick
+                    clip: true
+
+                    Row {
+                        width: historyPage.totalWidth
+                        height: parent.height
+                        spacing: 16
+                        // 不要 anchors.margins；Row 用 spacing 控间距即可
+
+                        Label { text: "ID";       width: historyPage.w_id;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "项目ID";   width: historyPage.w_pid;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "样品编号"; width: historyPage.w_no;      font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "样品来源"; width: historyPage.w_src;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "样品名称"; width: historyPage.w_name;    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "标准曲线"; width: historyPage.w_curve;   font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "批次编码"; width: historyPage.w_batch;   font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "检测浓度"; width: historyPage.w_conc;    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "参考值";   width: historyPage.w_ref;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "结果";     width: historyPage.w_res;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "检测时间"; width: historyPage.w_time;    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "检测单位"; width: historyPage.w_unit;    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "检测人员"; width: historyPage.w_person;  font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        Label { text: "稀释倍数"; width: historyPage.w_dilution;font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    }
+                }
+            }
+
+            // === 数据区（横向 + 纵向可滑） ===
+            Flickable {
+                id: dataFlick
+                // 这里可以用 anchors（不在 Column/RowLayout 内部）
+                anchors.top: historyHeaderBar.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                contentWidth: historyPage.totalWidth
+                contentHeight: dataList.contentHeight
+                flickableDirection: Flickable.HorizontalAndVerticalFlick
+                clip: true
+
+                // 横向滚动与表头同步
+                onContentXChanged: headerFlick.contentX = contentX
+
+                ListView {
+                    id: dataList
+                    width: historyPage.totalWidth
+                    height: dataFlick.height
+                    model: historyVm
+                    clip: true
+                    spacing: 0
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    delegate: Rectangle {
+                        width: historyPage.totalWidth
+                        height: 46
+                        color: index % 2 === 0 ? "#ffffff" : "#f9fafb"
+                        border.color: "#e5e7eb"
+                        border.width: 1
+
+                        Row {
+                            width: parent.width
+                            height: parent.height
+                            spacing: 16
+
+                            Label { text: id;             width: historyPage.w_id;      horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: projectId;      width: historyPage.w_pid;      horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: sampleNo;       width: historyPage.w_no;       horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: sampleSource;   width: historyPage.w_src;      horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: sampleName;     width: historyPage.w_name;     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: standardCurve;  width: historyPage.w_curve;    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: batchCode;      width: historyPage.w_batch;    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: Number(detectedConc).toFixed(2);   width: historyPage.w_conc; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: Number(referenceValue).toFixed(2); width: historyPage.w_ref;  horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label {
+                                text: result; width: historyPage.w_res;
+                                horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                color: result === "合格" ? "green" : "red"
                             }
+                            Label { text: detectedTime;   width: historyPage.w_time;     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; color: "#666" }
+                            Label { text: detectedUnit;   width: historyPage.w_unit;     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: detectedPerson; width: historyPage.w_person;   horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            Label { text: dilutionInfo;   width: historyPage.w_dilution; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // 调试：确认模型条数
+    Connections {
+        target: historyVm
+        onCountChanged: console.log("✅ QML 收到 countChanged =", historyVm.count)
+    }
+    Component.onCompleted: historyVm.refresh()
+}
+
+
+
+
+
                 }
             }
         }

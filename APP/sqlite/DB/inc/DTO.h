@@ -33,3 +33,23 @@ struct ProjectRow {
     QString updatedAt;  // 更新时间（文本，yyyy-MM-dd HH:mm:ss）
 };
 Q_DECLARE_METATYPE(ProjectRow)
+// =======================
+// 历史记录表（project_info）
+// =======================
+struct HistoryRow {
+    int id = 0;                   // 主键
+    int projectId = 0;            // 对应 projects.id
+    QString sampleNo;             // 样品编号
+    QString sampleSource;         // 样品来源
+    QString sampleName;           // 样品名称
+    QString standardCurve;        // 标准曲线类型
+    QString batchCode;            // 批次编码
+    double detectedConc = 0.0;    // 检测浓度
+    double referenceValue = 0.0;  // 参考值
+    QString result;               // 检测结论（合格/超标）
+    QString detectedTime;         // 检测时间
+    QString detectedUnit;         // 检测单位（默认 μg/kg）
+    QString detectedPerson;       // 检测人员
+    QString dilutionInfo;         // 稀释倍数（1倍 / 5倍）
+};
+Q_DECLARE_METATYPE(HistoryRow)
