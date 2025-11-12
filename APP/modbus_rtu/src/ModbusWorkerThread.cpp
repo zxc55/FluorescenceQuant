@@ -93,40 +93,62 @@ void ModbusWorkerThread::handleCommand(const MotorCommand& cmd) {
     bool ok = false;
 
     switch (cmd.type) {
-    case MotorCmdType::Enable:
-        ok = modbus_write_register(ctx, 0x00F3, 1) != -1;
+    case MotorCmdType::Enable: {
+        std::lock_guard<std::mutex> lk(ioMtx);  // ✅ 加锁
+        ok = (modbus_write_register(ctx, 0x00F3, 1) != -1);
         std::cout << "⚙️ 驱动使能\n";
         break;
-    case MotorCmdType::Disable:
-        ok = modbus_write_register(ctx, 0x00F3, 0) != -1;
+    }
+    case MotorCmdType::Disable: {
+        std::lock_guard<std::mutex> lk(ioMtx);  // ✅
+        ok = (modbus_write_register(ctx, 0x00F3, 0) != -1);
         std::cout << "🛑 驱动关闭\n";
         break;
-    case MotorCmdType::ClearAlarm:
-        ok = modbus_write_register(ctx, 0x00F3, 2) != -1;
+    }
+    case MotorCmdType::ClearAlarm: {
+        std::lock_guard<std::mutex> lk(ioMtx);  // ✅
+        ok = (modbus_write_register(ctx, 0x00F3, 2) != -1);
         std::cout << "🚨 清除报警\n";
         break;
-    case MotorCmdType::Stop:
-        ok = modbus_write_register(ctx, 0x00F7, 1) != -1;
+    }
+    case MotorCmdType::Stop: {
+        std::lock_guard<std::mutex> lk(ioMtx);  // ✅
+        ok = (modbus_write_register(ctx, 0x00F7, 1) != -1);
         std::cout << "⛔ 立停\n";
         break;
+    }
     case MotorCmdType::RunSpeed: {
         uint16_t regs[2];
         regs[0] = ((cmd.dir & 0xFF) << 8) | (cmd.acc & 0xFF);
         regs[1] = static_cast<uint16_t>(cmd.rpm);
-        ok = modbus_write_registers(ctx, 0x00F6, 2, regs) != -1;
+        {
+            std::lock_guard<std::mutex> lk(ioMtx);  // ✅
+            ok = (modbus_write_registers(ctx, 0x00F6, 2, regs) != -1);
+        }
         std::cout << "🚀 速度模式 dir=" << cmd.dir << " rpm=" << cmd.rpm << "\n";
         break;
     }
     case MotorCmdType::RunPosition: {
+        // std::this_thread::sleep_for(std::chrono::milliseconds(2000));  // 延时2秒
         uint16_t regs[4];
+
         regs[0] = ((cmd.dir & 0xFF) << 8) | (cmd.acc & 0xFF);
         regs[1] = static_cast<uint16_t>(cmd.rpm);
         regs[2] = (cmd.pulses >> 16) & 0xFFFF;
-        regs[3] = cmd.pulses & 0xFFFF;
-        ok = modbus_write_registers(ctx, 0x00FD, 4, regs) != -1;
+        regs[3] = (cmd.pulses) & 0xFFFF;
+        {
+            std::lock_guard<std::mutex> lk(ioMtx);  // ✅
+            ok = (modbus_write_registers(ctx, 0x00FD, 4, regs) != -1);
+        }
         std::cout << "📍 位置模式 dir=" << cmd.dir
                   << " rpm=" << cmd.rpm
                   << " pulses=" << cmd.pulses << "\n";
+        break;
+    }
+    case MotorCmdType::Back: {
+        std::lock_guard<std::mutex> lk(ioMtx);  // ✅
+        ok = (modbus_write_register(ctx, 0x0091, 1) != -1);
+        std::cout << "🔙 回原点\n";
         break;
     }
     default:
@@ -136,4 +158,25 @@ void ModbusWorkerThread::handleCommand(const MotorCommand& cmd) {
     if (!ok) {
         std::cerr << "❌ Modbus 命令执行失败: " << modbus_strerror(errno) << std::endl;
     }
+}
+
+int ModbusWorkerThread::readRegister(int addr) {
+    if (!ctx) {
+        std::cerr << "❌ Modbus 未连接，无法读取寄存器" << std::endl;
+        return -1;
+    }
+
+    uint16_t val = 0;
+    // ✅ 使用输入寄存器读取函数 (功能码 04)
+    std::lock_guard<std::mutex> lk(ioMtx);
+    int rc = modbus_read_input_registers(ctx, addr, 1, &val);
+    if (rc == -1) {
+        std::cerr << "❌ 读取输入寄存器失败: " << modbus_strerror(errno)
+                  << "  地址: 0x" << std::hex << addr << std::endl;
+        return -1;
+    }
+
+    std::cout << "📖 输入寄存器 0x" << std::hex << addr
+              << " 值=" << std::dec << val << std::endl;
+    return static_cast<int>(val);
 }

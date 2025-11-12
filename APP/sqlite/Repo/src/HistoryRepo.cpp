@@ -1,64 +1,19 @@
 #include "HistoryRepo.h"
 
+#include <QDebug>
 #include <QSqlError>
+#include <QSqlQuery>
+#include <QVariant>
 
-bool HistoryRepo::insert(QSqlDatabase& db, const HistoryRow& r) {
-    if (!db.isOpen()) {
-        qWarning() << "[HistoryRepo] DB not open";
-        return false;
-    }
-
+bool HistoryRepo::selectAll(QSqlDatabase db, QVector<HistoryRow>& out) {
     QSqlQuery q(db);
-    q.prepare(R"SQL(
-        INSERT INTO project_info (
-            project_id, sample_no, sample_source, sample_name,
-            standard_curve, batch_code, detected_conc, reference_value,
-            result, detected_time, detected_unit, detected_person, dilution_info
-        ) VALUES (
-            :project_id, :sample_no, :sample_source, :sample_name,
-            :standard_curve, :batch_code, :detected_conc, :reference_value,
-            :result, :detected_time, :detected_unit, :detected_person, :dilution_info
-        )
-    )SQL");
-
-    q.bindValue(":project_id", r.projectId);
-    q.bindValue(":sample_no", r.sampleNo);
-    q.bindValue(":sample_source", r.sampleSource);
-    q.bindValue(":sample_name", r.sampleName);
-    q.bindValue(":standard_curve", r.standardCurve);
-    q.bindValue(":batch_code", r.batchCode);
-    q.bindValue(":detected_conc", r.detectedConc);
-    q.bindValue(":reference_value", r.referenceValue);
-    q.bindValue(":result", r.result);
-    q.bindValue(":detected_time", r.detectedTime);
-    q.bindValue(":detected_unit", r.detectedUnit);
-    q.bindValue(":detected_person", r.detectedPerson);
-    q.bindValue(":dilution_info", r.dilutionInfo);
-
-    if (!q.exec()) {
-        qWarning() << "[HistoryRepo] insert fail:" << q.lastError().text();
-        return false;
-    }
-
-    qInfo() << "[HistoryRepo] insert ok, id=" << q.lastInsertId();
-    return true;
-}
-
-bool HistoryRepo::selectAll(QSqlDatabase& db, QVector<HistoryRow>& outRows) {
-    outRows.clear();
-    if (!db.isOpen()) {
-        qWarning() << "[HistoryRepo] DB not open";
-        return false;
-    }
-
-    QSqlQuery q(db);
-    if (!q.exec(R"SQL(
-        SELECT id, project_id, sample_no, sample_source, sample_name,
-               standard_curve, batch_code, detected_conc, reference_value,
-               result, detected_time, detected_unit, detected_person, dilution_info
+    if (!q.exec(R"(
+        SELECT id, projectId, sampleNo, sampleSource, sampleName, standardCurve,
+               batchCode, detectedConc, referenceValue, result,
+               detectedTime, detectedUnit, detectedPerson, dilutionInfo
         FROM project_info ORDER BY id DESC
-    )SQL")) {
-        qWarning() << "[HistoryRepo] selectAll fail:" << q.lastError().text();
+    )")) {
+        qWarning() << "HistoryRepo::selectAll failed:" << q.lastError().text();
         return false;
     }
 
@@ -78,9 +33,50 @@ bool HistoryRepo::selectAll(QSqlDatabase& db, QVector<HistoryRow>& outRows) {
         r.detectedUnit = q.value(11).toString();
         r.detectedPerson = q.value(12).toString();
         r.dilutionInfo = q.value(13).toString();
-        outRows.push_back(r);
+        out.append(r);
     }
+    return true;
+}
 
-    qInfo() << "[HistoryRepo] loaded" << outRows.size() << "rows.";
+bool HistoryRepo::insert(QSqlDatabase db, const HistoryRow& row) {
+    QSqlQuery q(db);
+    q.prepare(R"SQL(
+INSERT INTO project_info (
+    projectId, sampleNo, sampleSource, sampleName,
+    standardCurve, batchCode, detectedConc,
+    referenceValue, result, detectedTime,
+    detectedUnit, detectedPerson, dilutionInfo
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?);
+)SQL");
+
+    q.addBindValue(row.projectId);
+    q.addBindValue(row.sampleNo);
+    q.addBindValue(row.sampleSource);
+    q.addBindValue(row.sampleName);
+    q.addBindValue(row.standardCurve);
+    q.addBindValue(row.batchCode);
+    q.addBindValue(row.detectedConc);
+    q.addBindValue(row.referenceValue);
+    q.addBindValue(row.result);
+    q.addBindValue(row.detectedTime);
+    q.addBindValue(row.detectedUnit);
+    q.addBindValue(row.detectedPerson);
+    q.addBindValue(row.dilutionInfo);
+
+    if (!q.exec()) {
+        qWarning() << "HistoryRepo::insert failed:" << q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+bool HistoryRepo::deleteById(QSqlDatabase db, int id) {
+    QSqlQuery q(db);
+    q.prepare("DELETE FROM project_info WHERE id = ?");
+    q.addBindValue(id);
+    if (!q.exec()) {
+        qWarning() << "HistoryRepo::deleteById failed:" << q.lastError().text();
+        return false;
+    }
     return true;
 }

@@ -17,7 +17,9 @@ enum class DBTaskType {
     DeleteProject,
     // —— 历史记录 —— //
     LoadHistory,
-    InsertHistory
+    InsertHistory,
+    DeleteHistory,
+    ExportHistory
 };
 
 struct DBTask {
@@ -107,6 +109,19 @@ struct DBTask {
         DBTask t;
         t.type = DBTaskType::InsertHistory;
         t.history = row;  // ✅ 直接存结构体
+        return t;
+    }
+    static DBTask deleteHistory(int id) {
+        DBTask t;
+        t.type = DBTaskType::DeleteHistory;
+        t.p1 = id;
+        return t;
+    }
+
+    static DBTask exportHistory(const QString& path) {
+        DBTask t;
+        t.type = DBTaskType::ExportHistory;
+        t.s1 = path;
         return t;
     }
 };

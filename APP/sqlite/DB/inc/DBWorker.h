@@ -19,61 +19,65 @@ public:
     explicit DBWorker(const QString& dbPath, QObject* parent = nullptr);
     ~DBWorker() override;
 
-    // 线程启动后的初始化（在工作线程内调用）
+    // === 初始化 ===
     Q_INVOKABLE void initialize();
 
-    // ========== 任务入队（对外接口） ==========
+    // === 设置 ===
     Q_INVOKABLE void postEnsureAllSchemas();
     Q_INVOKABLE void postLoadSettings();
     Q_INVOKABLE void postUpdateSettings(const AppSettingsRow& row);
 
-    // 用户
+    // === 用户 ===
     Q_INVOKABLE void postAuthLogin(const QString& u, const QString& p);
     Q_INVOKABLE void postLoadUsers();
     Q_INVOKABLE void postAddUser(const QString& u, const QString& p, const QString& role, const QString& note);
     Q_INVOKABLE void postDeleteUser(const QString& u);
     Q_INVOKABLE void postResetPassword(const QString& u, const QString& p);
 
-    // **项目**
+    // === 项目 ===
     Q_INVOKABLE void postLoadProjects();
     Q_INVOKABLE void postDeleteProject(int id);
-    // *History**
+
+    // === 历史记录 ===
     Q_INVOKABLE void postLoadHistory();
     Q_INVOKABLE void postInsertHistory(const HistoryRow& row);
+    Q_INVOKABLE void postDeleteHistory(int id);
+    Q_INVOKABLE void postExportHistory(const QString& csvPath);
 
 signals:
     void ready();
     void errorOccurred(const QString& msg);
 
-    // settings
+    // === Settings ===
     void settingsLoaded(const AppSettingsRow& row);
     void settingsUpdated(bool ok);
 
-    // users
+    // === Users ===
     void authResult(bool ok, const QString& username, const QString& role);
     void usersLoaded(const QVector<UserRow>& rows);
     void userAdded(bool ok, const QString& username);
     void userDeleted(bool ok, const QString& username);
     void passwordReset(bool ok, const QString& username);
 
-    // **projects**
+    // === Projects ===
     void projectsLoaded(const QVector<ProjectRow>& rows);
     void projectDeleted(bool ok, int id);
-    // *History**
+
+    // === History ===
     void historyLoaded(const QVector<HistoryRow>& rows);
     void historyInserted(bool ok);
+    void historyDeleted(bool ok, int id);
+    void historyExported(bool ok, const QString& path);
 
 private:
-    // 线程主循环
+    // === 内部逻辑 ===
     void threadLoop();
-
-    // 数据库生命周期仅在该线程里使用
     bool openDatabaseInThisThread();
     void closeDatabaseInThisThread();
     bool execPragmas();
     bool ensureAllSchemas();
 
-    // 内部实际操作
+    // === 内部操作 ===
     bool loadSettingsInternal(AppSettingsRow& out);
     bool updateSettingsInternal(const AppSettingsRow& in);
 
@@ -83,9 +87,14 @@ private:
     bool deleteUserInternal(const QString& u);
     bool resetPasswordInternal(const QString& u, const QString& p);
 
-    // **projects**
     bool loadProjectsInternal(QVector<ProjectRow>& out);
     bool deleteProjectInternal(int id);
+
+    // === 历史记录 ===
+    bool loadHistoryInternal(QVector<HistoryRow>& out);
+    bool insertHistoryInternal(const HistoryRow& row);
+    bool deleteHistoryInternal(int id);
+    bool exportHistoryInternal(const QString& csvPath);
 
 private:
     QString dbPath_;
@@ -98,7 +107,6 @@ private:
     std::condition_variable cv_;
     std::queue<DBTask> q_;
 
-    // settings pending
     AppSettingsRow pendingSettings_;
     bool hasPendingSettings_ = false;
 };

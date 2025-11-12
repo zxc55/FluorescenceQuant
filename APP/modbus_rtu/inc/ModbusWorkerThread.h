@@ -20,7 +20,8 @@ enum class MotorCmdType {
     RunSpeed,     // 速度控制模式运行
     RunPosition,  // 位置控制模式运行
     Stop,         // 立停
-    Exit          // 退出线程
+    Exit,         // 退出线程
+    Back          // 回原点
 };
 
 /**
@@ -46,6 +47,7 @@ public:
     void start();
     void stop();
     void enqueue(const MotorCommand& cmd);
+    int readRegister(int addr);
 
 private:
     void threadFunc();
@@ -64,6 +66,7 @@ private:
     std::condition_variable cv;
     std::queue<MotorCommand> cmdQueue;
     std::atomic<bool> running{false};
+    std::mutex ioMtx;
 };
 
 #endif  // MODBUSWORKERTHREAD_H_

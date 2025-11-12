@@ -5,6 +5,7 @@ import QtQuick.Layouts 1.12
 import QtQuick.VirtualKeyboard 2.0
 import QtQuick.VirtualKeyboard.Settings 2.0
 import App 1.0
+import Motor 1.0
 ApplicationWindow {
     id: win
     visible: true
@@ -15,9 +16,7 @@ ApplicationWindow {
     font.family: "Microsoft YaHei"   // 字体（根据系统可用字体调整）
     font.bold: true                  // 全部加粗
     font.pixelSize: 20               // 默认字号
-//     ProjectsViewModel {
-//     id: projectsVm
-// }
+    MotorController { id: motor }
     // ===== 主题 / 常量 =====
     readonly property color  brand:      "#3a7afe"
     readonly property color  textMain:   "#1f2937"
@@ -27,10 +26,10 @@ ApplicationWindow {
     readonly property int    radiusS:    8
 
     // 可能由 main.cpp 注入的对象（安全判空使用）
-    property var keysObj: (typeof keys !== "undefined") ? keys : null
-
+    // property var keysObj: (typeof keys !== "undefined") ? keys : null
+    property bool cardInserted: keys ? keys.inserted : false
     // 卡状态 & 弹层
-    property bool   cardInserted: false
+   
     property bool   overlayVisible: false
     property string overlayText: ""
     property bool   overlayBusy: false
@@ -41,21 +40,17 @@ ApplicationWindow {
     // 虚拟键盘高度
     readonly property int kbHeight: Math.round(Qt.inputMethod.visible ? Qt.inputMethod.keyboardRectangle.height : 0)
 
+
+    property bool testRunning: false     // 防止重复检测
+    property bool motorMoving: false     // 电机运行标志
+    property var originCheckTimer: Timer // 定时器对象引用
     // ==== 初始化 ====
     Component.onCompleted: {
         VirtualKeyboardSettings.activeLocales = ["en_US", "zh_CN"]
         VirtualKeyboardSettings.locale = "zh_CN"
         console.log("projectsVm.count (onCompleted) =", (typeof projectsVm !== "undefined") ? projectsVm.count : "N/A")
-        try {
-            if (keysObj && keysObj.inserted !== undefined) {
-                cardInserted = keysObj.inserted
-                if (cardInserted) {
-                    overlayText = "正在检测中…"
-                    overlayBusy = true
-                    overlayVisible = true
-                }
-            }
-        } catch(e) {}
+        motor.start()
+        motor.back();
     }
 
     // 键盘面板
@@ -111,6 +106,121 @@ ApplicationWindow {
             opacity: 0.08
         }
     }
+    Connections {
+    target: keys
+    onInsertedChanged: function(on) {
+         cardInserted = !!on
+         console.log("插卡状态:", on)
+    }
+    }
+
+function nowStr() {
+    var d = new Date()
+    var ms = ("00" + d.getMilliseconds()).slice(-3)
+    return Qt.formatTime(d, "hh:mm:ss") + "." + ms
+}
+
+function startTest() {
+    if (testRunning) {
+        console.log("⚠️[" + nowStr() + "] 已在检测中，忽略重复触发")
+        return
+    }
+    testRunning = true
+
+    console.log("🧪[" + nowStr() + "] 回原点完成 → 延时 2 秒后启动检测")
+    overlayText = "正在检测中…"
+    overlayBusy = true
+    overlayVisible = true
+
+    // === 延时 2 秒后启动电机与采集 ===
+    var delayTimer = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false }', win)
+    console.log("⏳[" + nowStr() + "] 启动延时 2000ms → 即将启动采集与电机")
+
+    delayTimer.triggered.connect(function() {
+        console.log("⏱[" + nowStr() + "] 延时结束 → 启动采集与电机")
+
+        // === 启动 ADS1115 连续采集 ===
+        mainViewModel.setCurrentSample(tfSampleId.text)
+        mainViewModel.startReading()
+        console.log("🧪[" + nowStr() + "] 启动连续采集")
+
+        // === 启动电机运行 ===
+        motor.runPosition(1, 0, 100, 45000)
+        console.log("🚀[" + nowStr() + "] 电机开始运行")
+
+        // === 检测电机状态直到停止 ===
+        var motorCheck = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true }', win)
+        motorCheck.triggered.connect(function() {
+            var status = motor.readRegister(0xF1)
+            console.log("📖[" + nowStr() + "] 电机状态 0xF1 =", status)
+
+            if (status === 1) { // ✅ 停止状态
+                motorCheck.stop()
+                console.log("✅[" + nowStr() + "] 电机停止 → 停止采集")
+
+                // === 停止采集 ===
+                mainViewModel.stopReading()
+                console.log("⏹[" + nowStr() + "] 停止采集")
+
+                // === 回原点 ===
+                motor.back()
+                console.log("🔙[" + nowStr() + "] 回原点")
+
+                // === 读取界面输入信息 ===
+                var sampleNo = tfSampleId.text          // 样品编号
+                var source   = tfSampleSource.text      // 样品来源
+                var name     = tfSampleName.text        // 样品名称
+                var batch    = projectsVm.getBatchById(projectPage.selectedId) // 批次编码
+                var curve    = standardCurveBox.currentText  // 标准曲线
+                var conc     = 0                        // 检测浓度（暂时为 0）
+                var ref      = parseFloat(refValueField.text || 0)  // 参考值
+                var result   = "未测"                   // 检测结果
+                var time     = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss") // 时间
+                var unit     = tfLab.text               // 检测单位
+                var person   = tfOperator.text          // 检测人
+                var dilution = dilutionBox.currentText  // 稀释倍数
+
+                // === 组装记录对象 ===
+                var record = {
+                    "projectId": projectPage.selectedId,
+                    "sampleNo": sampleNo,
+                    "sampleSource": source,
+                    "sampleName": name,
+                    "standardCurve": curve,
+                    "batchCode": batch,
+                    "detectedConc": conc,
+                    "referenceValue": ref,
+                    "result": result,
+                    "detectedTime": time,
+                    "detectedUnit": unit,
+                    "detectedPerson": person,
+                    "dilutionInfo": dilution
+                }
+
+                console.log("[DEBUG] 即将写入数据库:", JSON.stringify(record))
+
+                // === 写入数据库 ===
+                var ok = projectsVm.insertProjectInfo(record)
+                console.log(ok ? "[DB] 插入成功 ✅" : "[DB] 插入失败 ❌")
+
+                // === 界面提示完成 ===
+                overlayText = ok ? "检测完成，数据已保存 ✅" : "检测完成，但数据库写入失败 ❌"
+                overlayBusy = false
+                overlayVisible = true
+                testRunning = false
+            }
+        })
+        motorCheck.start()
+    })
+    delayTimer.start()
+}
+
+
+
+
+
+
+ 
 
     // 主体布局：左侧导航 + 右侧内容
     RowLayout {
@@ -204,50 +314,75 @@ ApplicationWindow {
                     height: sideBar.tileH
                     padding: 0
                     onClicked:{ 
-                        console.log("开始检测")
-                                    // === 组装要写入数据库的记录 ===
-                    var record = {
-                        project_id: projectPage.selectedId,
-                        sample_no: tfSampleId.text,
-                        sample_source: tfSampleSource.text,
-                        sample_name: tfSampleName.text,
-                        standard_curve: standardCurveBox.currentText,
-                        batch_code: projectsVm.getBatchById(projectPage.selectedId),
-                        detected_conc: 0.0, // 检测开始时为0
-                        reference_value: parseFloat(refValueField.text || 0.0),
-                        result: "", // 检测完成后更新
-                        detected_time: Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss"),
-                        detected_unit: "μg/kg",
-                        detected_person: tfOperator.text,
-                        dilution_info: dilutionBox.currentText
-                    }
-
-                    console.log("[DEBUG] 即将写入数据库:", JSON.stringify(record))
-                    var ok = projectsVm.insertProjectInfo(record)
-                    console.log(ok ? "[DB] 插入成功 ✅" : "[DB] 插入失败 ❌")
-
-                    if (ok) {
-                        overlayText = "检测开始..."
-                        overlayBusy = true
-                        overlayVisible = true
-                        Qt.callLater(() => {
+                   if (!cardInserted) {
+                            overlayText = "请检查检测卡位置"
                             overlayBusy = false
-                            overlayText = "检测结束"
-                            Qt.callLater(() => overlayVisible = false, 2000)
-                        })
+                            overlayVisible = true
+                            return
+                        }
+
+                        console.log("检测插卡后 → 检查电机原点状态")
+                        var val = motor.readRegister(0x34)
+                        console.log("寄存器 0x34 值:", val)
+
+                        if (val === 0) {
+                            overlayText = "电机未在原点，正在回原点..."
+                            overlayBusy = true
+                            overlayVisible = true
+                            motor.back()
+                            originCheckTimer.start()
+                            return
+                        } else if (val > 0) {
+                            console.log("✅ 电机在原点，先前进一段再回原点")
+                            overlayText = "电机前进中..."
+                            overlayBusy = true
+                            overlayVisible = true
+                            motor.runPosition(1, 0, 100, 10000)
+
+                            var forwardCheck = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true; }', win)
+                            forwardCheck.triggered.connect(function() {
+                                var status = motor.readRegister(0xF1)
+                                console.log("⚙️ 电机状态 0xF1 =", status)
+                                if (status === 1) {
+                                    forwardCheck.stop()
+                                    console.log("✅ 前进完成，开始回原点")
+                                    overlayText = "返回原点中..."
+                                    motor.back()
+
+                                    var backTimer = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true; }', win)
+                                    backTimer.triggered.connect(function() {
+                                        var val2 = motor.readRegister(0x34)
+                                        console.log("📖 寄存器 0x34 =", val2)
+                                        if (val2 === 1) {
+                                            backTimer.stop()
+                                            console.log("✅ 已回原点，准备开始检测")
+                                            overlayText = "准备检测中..."
+                                            overlayBusy = true
+                                            overlayVisible = true
+                                            startTest()   // ✅ 只在这里启动一次
+                                        }
+                                    })
+                                    backTimer.start()
+                                }
+                            })
+                            forwardCheck.start()
+                        } else {
+                            overlayText = "读取电机状态失败，请检查通信"
+                            overlayBusy = false
+                            overlayVisible = true
+                        }         
                     }
-                    }
-                    background: Rectangle {
-                        anchors.fill: parent; radius: 10
-                        gradient: Gradient {
+                background: Rectangle {
+                            anchors.fill: parent; radius: 10
+                            gradient: Gradient {
                             GradientStop { position: 0.0; color: "#4c86ff" }
                             GradientStop { position: 1.0; color: "#2f6ff5" }
-                        }
-                        border.color: "#2b5fd8"; border.width: 1
-                        Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                            height: 6; radius: 10; color: "#33ffffff" }
-                        Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-                            height: 8; radius: 10; color: "#1a000000" }
+                           }
+                            border.color: "#2b5fd8"; border.width: 1
+                            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                                height: 6; radius: 10; color: "#33ffffff" }
+                            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                                height: 8; radius: 10; color: "#1a000000" }
                     }
                     contentItem: Item {
                         anchors.fill: parent
@@ -324,6 +459,10 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.margins: 18
                     currentIndex: currentPage
+
+
+
+
 
 // ==========================
 // 样品检测界面右侧
@@ -661,7 +800,7 @@ Rectangle {
 
             // === 内容滚动区 ===
             Flickable {
-                id: flick
+                id: flickProject    
                 anchors.top: header.bottom
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -671,11 +810,11 @@ Rectangle {
                 interactive: true
 
                 // ✅ 内容高度至少比 Flickable 高 1 像素，这样即使少数据也能拖动
-                contentHeight: Math.max(contentCol.height, flick.height + 1)
+                contentHeight: Math.max(contentCol.height, flickProject.height + 1)
 
                 Column {
                     id: contentCol
-                    width: flick.width
+                    width: flickProject.width
 
 // === 数据行 ===
 Repeater {
@@ -818,214 +957,348 @@ Repeater {
     }
 }
 
-// ===== 2 历史记录（最终 ListView 版：Qt 5.12 稳定显示）=====
-// ===== 2 历史记录（单文件版，左右可滑，表头同步） =====
-Rectangle {
+// ===== 2 历史记录页（带选中删除）=====
+Item {
     id: historyPage
     anchors.fill: parent
-    color: "#ffffff"
 
-    // —— 列宽定义（放在最外层，下面统一用 historyPage.前缀）——
-    property int w_id: 60
+    // 列宽 & 行高
+    property int rowHeight: 44
+    property int w_sel: 44
+    property int w_id: 80
     property int w_pid: 80
-    property int w_no: 130
-    property int w_src: 130
-    property int w_name: 150
-    property int w_curve: 130
-    property int w_batch: 130
+    property int w_no: 120
+    property int w_src: 120
+    property int w_name: 140
+    property int w_curve: 120
+    property int w_batch: 100
     property int w_conc: 100
     property int w_ref: 100
-    property int w_res: 80
-    property int w_time: 180
-    property int w_unit: 80
-    property int w_person: 100
-    property int w_dilution: 90
-    property int totalWidth: historyPage.w_id + historyPage.w_pid + historyPage.w_no + historyPage.w_src +
-                             historyPage.w_name + historyPage.w_curve + historyPage.w_batch +
-                             historyPage.w_conc + historyPage.w_ref + historyPage.w_res +
-                             historyPage.w_time + historyPage.w_unit + historyPage.w_person +
-                             historyPage.w_dilution + (16 * 13)   // 13 个间距
+    property int w_res: 100
+    property int w_time: 160
+    property int w_unit: 100
+    property int w_person: 120
+    property int w_dilution: 120
+    property int totalWidth: w_sel + w_id + w_pid + w_no + w_src + w_name + w_curve +
+                             w_batch + w_conc + w_ref + w_res + w_time +
+                             w_unit + w_person + w_dilution
 
-    Column {
-        // 不用 anchors.fill，换成 width/height，避免 Column 警告
-        width: parent.width
-        height: parent.height
+    // 选中集合
+    property var selectedIds: []
+
+    function isSelected(recId) {
+        return selectedIds.indexOf(recId) !== -1
+    }
+    function setSelected(recId, on) {
+        var arr = selectedIds.slice(0)
+        var pos = arr.indexOf(recId)
+        if (on && pos === -1) arr.push(recId)
+        if (!on && pos !== -1) arr.splice(pos, 1)
+        selectedIds = arr
+    }
+    function toggleSelected(recId) { setSelected(recId, !isSelected(recId)) }
+    function selectAllOnPage(on) {
+        // 遍历当前可见的 model
+        for (var i = 0; i < listView.count; ++i) {
+            var it = listView.itemAtIndex(i)
+            if (it && it.modelId !== undefined)
+                setSelected(it.modelId, on)
+        }
+    }
+    function deleteSelected() {
+        if (selectedIds.length === 0) return
+        for (var i = 0; i < selectedIds.length; ++i) {
+            if (historyVm && historyVm.deleteById)
+                historyVm.deleteById(selectedIds[i])
+        }
+        selectedIds = []
+        if (historyVm && historyVm.refresh) historyVm.refresh()
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
         spacing: 8
 
-        // === 标题行 ===
-        Row {
-            width: parent.width
-            height: 50
+        // === 顶部栏 ===
+        RowLayout {
+            Layout.fillWidth: true
             spacing: 12
-
-            Label {
-                text: "历史记录"
-                font.pixelSize: 24
-                font.bold: true
-                color: "#000000"
-                verticalAlignment: Text.AlignVCenter
-            }
-            // 占位拉伸：Row 不是 Layout，用一个弹性 Item
-            Item { width: Math.max(0, parent.width - 240) ; height: 1 }
+            Label { text: "历史记录"; font.pixelSize: 24; font.bold: true; color: "#111827" }
+            Item { Layout.fillWidth: true }
             Button { text: "刷新"; onClicked: historyVm.refresh() }
+            Button {
+                text: "删除选中"
+                enabled: historyPage.selectedIds.length > 0
+                onClicked: historyPage.deleteSelected()
+            }
+            Button {
+                text: "导出CSV"
+                onClicked: {
+                    let name = "history_" + new Date().toLocaleString().replace(/[ :\/]/g, "_") + ".csv"
+                    let filePath = "/mnt/SDCARD/export/" + name
+                    historyVm.exportCsv(filePath)
+                    console.log("[CSV] 导出:", filePath)
+                }
+            }
         }
 
         // === 表格主体 ===
         Rectangle {
-            width: parent.width
-            height: parent.height - 60
-            radius: 6
+            id: his_table
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            radius: 8
             color: "#ffffff"
-            border.color: "#cccccc"
+            border.color: "#d1d5db"
             border.width: 1
             clip: true
 
-            // === 表头（横向可滑） ===
+            // === 表头（固定） ===
             Rectangle {
-                id: historyHeaderBar
-                width: parent.width
-                height: 48
+                id: headerBar
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: historyPage.rowHeight
                 color: "#f3f4f6"
-                border.color: "#cccccc"
+                border.color: "#d1d5db"
                 border.width: 1
-                z: 2
+                clip: true
 
-                Flickable {
-                    id: headerFlick
-                    width: parent.width
+                Row {
+                    id: headerRow
+                    x: -bodyFlick.contentX              // 跟随内容横向滚动
+                    width: historyPage.totalWidth
                     height: parent.height
-                    contentWidth: historyPage.totalWidth
-                    contentHeight: height
-                    flickableDirection: Flickable.HorizontalFlick
-                    clip: true
+                    spacing: 0
 
-                    Row {
-                        width: historyPage.totalWidth
-                        height: parent.height
-                        spacing: 16
-                        // 不要 anchors.margins；Row 用 spacing 控间距即可
-
-                        Label { text: "ID";       width: historyPage.w_id;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "项目ID";   width: historyPage.w_pid;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "样品编号"; width: historyPage.w_no;      font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "样品来源"; width: historyPage.w_src;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "样品名称"; width: historyPage.w_name;    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "标准曲线"; width: historyPage.w_curve;   font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "批次编码"; width: historyPage.w_batch;   font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "检测浓度"; width: historyPage.w_conc;    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "参考值";   width: historyPage.w_ref;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "结果";     width: historyPage.w_res;     font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "检测时间"; width: historyPage.w_time;    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "检测单位"; width: historyPage.w_unit;    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "检测人员"; width: historyPage.w_person;  font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        Label { text: "稀释倍数"; width: historyPage.w_dilution;font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    // 选择列（全选）
+                    Rectangle {
+                        width: historyPage.w_sel; height: parent.height; color: "transparent"
+                        CheckBox {
+                            id: cbSelectAll
+                            anchors.centerIn: parent
+                            tristate: false
+                            checked: (historyPage.selectedIds.length > 0
+                                      && historyPage.selectedIds.length === listView.count
+                                      && listView.count > 0)
+                            onClicked: historyPage.selectAllOnPage(checked)
+                        }
                     }
+                    Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "ID";       font.bold: true } }
+                    Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "项目ID";   font.bold: true } }
+                    Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品编号"; font.bold: true } }
+                    Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品来源"; font.bold: true } }
+                    Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品名称"; font.bold: true } }
+                    Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "标准曲线"; font.bold: true } }
+                    Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "批次";     font.bold: true } }
+                    Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "浓度";     font.bold: true } }
+                    Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "参考";     font.bold: true } }
+                    Rectangle { width: historyPage.w_res;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "结果";     font.bold: true } }
+                    Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "检测时间"; font.bold: true } }
+                    Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "单位";     font.bold: true } }
+                    Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "检测人";   font.bold: true } }
+                    Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "稀释倍数"; font.bold: true } }
                 }
             }
 
-            // === 数据区（横向 + 纵向可滑） ===
+            // === 内容区 ===
             Flickable {
-                id: dataFlick
-                // 这里可以用 anchors（不在 Column/RowLayout 内部）
-                anchors.top: historyHeaderBar.bottom
+                id: bodyFlick
+                anchors.top: headerBar.bottom
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                contentWidth: historyPage.totalWidth
-                contentHeight: dataList.contentHeight
-                flickableDirection: Flickable.HorizontalAndVerticalFlick
                 clip: true
 
-                // 横向滚动与表头同步
-                onContentXChanged: headerFlick.contentX = contentX
+                contentWidth: historyPage.totalWidth
+                contentHeight: listView.contentHeight
 
                 ListView {
-                    id: dataList
+                    id: listView
+                    x: 0
+                    y: 0
                     width: historyPage.totalWidth
-                    height: dataFlick.height
-                    model: historyVm
+                    height: bodyFlick.height
                     clip: true
-                    spacing: 0
                     boundsBehavior: Flickable.StopAtBounds
+                    spacing: 0
+                    model: (typeof historyVm !== "undefined" && historyVm) ? historyVm : 0
 
                     delegate: Rectangle {
+                        // 把 model 中的 id 单独存到属性，避免和 QML 的 id 关键字混淆
+                        property var modelId: id
+
                         width: historyPage.totalWidth
-                        height: 46
-                        color: index % 2 === 0 ? "#ffffff" : "#f9fafb"
+                        height: historyPage.rowHeight
+                        color: historyPage.isSelected(modelId) ? "#dbeafe" :
+                               (index % 2 === 0 ? "#ffffff" : "#f9fafb")
                         border.color: "#e5e7eb"
                         border.width: 1
 
                         Row {
                             width: parent.width
                             height: parent.height
-                            spacing: 16
+                            spacing: 0
 
-                            Label { text: id;             width: historyPage.w_id;      horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: projectId;      width: historyPage.w_pid;      horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: sampleNo;       width: historyPage.w_no;       horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: sampleSource;   width: historyPage.w_src;      horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: sampleName;     width: historyPage.w_name;     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: standardCurve;  width: historyPage.w_curve;    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: batchCode;      width: historyPage.w_batch;    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: Number(detectedConc).toFixed(2);   width: historyPage.w_conc; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: Number(referenceValue).toFixed(2); width: historyPage.w_ref;  horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label {
-                                text: result; width: historyPage.w_res;
-                                horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                                color: result === "合格" ? "green" : "red"
+                            // 选择列
+                            Rectangle {
+                                width: historyPage.w_sel; height: parent.height; color: "transparent"
+                                CheckBox {
+                                    anchors.centerIn: parent
+                                    checked: historyPage.isSelected(modelId)
+                                    onClicked: historyPage.toggleSelected(modelId)
+                                }
                             }
-                            Label { text: detectedTime;   width: historyPage.w_time;     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; color: "#666" }
-                            Label { text: detectedUnit;   width: historyPage.w_unit;     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: detectedPerson; width: historyPage.w_person;   horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            Label { text: dilutionInfo;   width: historyPage.w_dilution; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+
+                            // 其余列
+                            Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: modelId } }
+                            Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectId } }
+                            Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleNo } }
+                            Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleSource } }
+                            Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleName } }
+                            Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: standardCurve } }
+                            Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: batchCode } }
+                            Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: Number(detectedConc).toFixed(2) } }
+                            Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: Number(referenceValue).toFixed(2) } }
+                            Rectangle {
+                                width: historyPage.w_res; height: parent.height; color: "transparent"
+                                Text { anchors.centerIn: parent; text: result; color: result === "合格" ? "green" : "red" }
+                            }
+                            Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedTime } }
+                            Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedUnit } }
+                            Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedPerson } }
+                            Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: dilutionInfo } }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: historyPage.toggleSelected(modelId)
                         }
                     }
+
+                    // 无数据占位
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: listView.count === 0
+                        color: "transparent"
+                        Text { anchors.centerIn: parent; text: "暂无数据"; color: "#909399" }
+                    }
                 }
+
+                // 滚动条
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
             }
         }
     }
 
-    // 调试：确认模型条数
-    Connections {
-        target: historyVm
-        onCountChanged: console.log("✅ QML 收到 countChanged =", historyVm.count)
+    Component.onCompleted: {
+        if (typeof historyVm !== "undefined" && historyVm && historyVm.refresh)
+            historyVm.refresh()
     }
-    Component.onCompleted: historyVm.refresh()
+}
+                }
+            }
+        }
+    }
+// ===== 开始检查弹层（覆盖全屏，卡片可上下微调）=====
+Rectangle {
+    id: overlayPopup2
+    anchors.fill: parent             // 一定要覆盖整个窗口
+    visible: overlayVisible          // 仍然用你的这三个变量
+    color: "#CC000000"
+    z: 10000                         // 保证最上层
+
+    // 点击背景关闭（忙碌时禁用）
+    MouseArea {
+        anchors.fill: parent
+        enabled: overlayVisible
+        onClicked: { if (!overlayBusy) overlayVisible = false }
+    }
+
+    // —— 想上下挪一点，就改这个偏移量（负数上移，正数下移）——
+    readonly property int centerYOffset: -30
+
+    // 中间卡片
+    Rectangle {
+        id: overlayPopup2Card
+        width: Math.min(parent.width - 160, 520)
+        radius: 16
+        color: "#ffffff"
+        border.color: "#e5e7eb"; border.width: 1
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: overlayPopup2.centerYOffset
+    }
+
+    // 内容布局
+    Column {
+        id: overlayPopup2Content
+        width: overlayPopup2Card.width - 48
+        anchors.horizontalCenter: overlayPopup2Card.horizontalCenter
+        anchors.verticalCenter: overlayPopup2Card.verticalCenter
+        spacing: 14
+
+        BusyIndicator {
+            running: overlayBusy
+            visible: overlayBusy
+            width: 44; height: 44
+            anchors.horizontalCenter: parent.horizontalCenter
+        }
+
+        Label {
+            text: overlayText
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            anchors.horizontalCenter: parent.horizontalCenter
+            font.pixelSize: 24
+            color: '#3a7afe'     
+            font.bold: true      // 加粗
+        }
+
+        Label {
+            visible: !overlayBusy
+            text: "请点击下方“确认”继续"
+            horizontalAlignment: Text.AlignHCenter
+            anchors.horizontalCenter: parent.horizontalCenter
+            font.pixelSize: 14
+            color: textSub
+        }
+
+        Button {
+            id: overlayPopup2OkBtn
+            visible: !overlayBusy
+            text: "确 认"
+            width: 200
+            height: 44
+            anchors.horizontalCenter: parent.horizontalCenter
+            font.pixelSize: 18
+            onClicked: overlayVisible = false
+
+            contentItem: Text {
+                text: overlayPopup2OkBtn.text
+                font: overlayPopup2OkBtn.font
+                color: "white"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+            background: Rectangle {
+                implicitWidth: 200
+                implicitHeight: 44
+                radius: 10
+                border.color: "#2b5fd8"
+                border.width: 1
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#4c86ff" }
+                    GradientStop { position: 1.0; color: "#2f6ff5" }
+                }
+            }
+        }
+    }
 }
 
-
-
-
-
-                }
-            }
-        }
-    }
-
-    // ===== 弹层 =====
-    Rectangle {
-        id: overlay
-        anchors.fill: parent
-        visible: overlayVisible
-        color: "#80000000"
-        z: 1000
-        MouseArea { anchors.fill: parent; enabled: overlayVisible }
-        Rectangle {
-            width: 440; height: 230; radius: radiusL
-            anchors.centerIn: parent
-            color: "#ffffff"; border.color: line; border.width: 1
-            Column {
-                anchors.centerIn: parent; spacing: 16
-                BusyIndicator { running: overlayBusy; visible: true; width: 48; height: 48 }
-                Label { text: overlayText; font.pixelSize: 24; color: textMain }
-                Label {
-                    visible: !overlayBusy && overlayText === "检测结束"
-                    text: "即将关闭…"; color: textSub; font.pixelSize: 14
-                    horizontalAlignment: Text.AlignHCenter
-                }
-            }
-        }
-    }
 
 // ===== 样品信息弹窗（优化排版版） =====
 Rectangle {
@@ -1229,6 +1502,35 @@ Rectangle {
     }
 }
 
+// === 电机原点轮询定时器 ===
+Timer {
+    id: originCheckTimer
+    interval: 500
+    repeat: true
+    running: false
+
+    onTriggered: {
+        var val = motor.readRegister(0x34)   // ✅ 改为 0x34
+        console.log("轮询原点状态: 0x34 =", val)
+
+        if (val === 1) {
+            console.log("✅ 电机回原点完成 → 延时 2 秒启动检测")
+            originCheckTimer.stop()
+            var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false; }', win)
+            t.triggered.connect(function() {
+                console.log("⏱[" + nowStr() + "] 延时 2000ms 结束 → 启动检测")
+                startTest()
+                t.destroy()
+            })
+            console.log("⏳[" + nowStr() + "] 启动延时 2000ms")
+            t.start()
+        } else if (val < 0) {
+            overlayText = "读取电机状态失败，请检查通信"
+            overlayBusy = false
+            originCheckTimer.stop()
+        }
+    }
+}
 
 
 }

@@ -66,9 +66,20 @@ void MotorController::runSpeed(int dir, int acc, int rpm) {
 void MotorController::runPosition(int dir, int acc, int rpm, int pulses) {
     if (worker) {
         worker->enqueue({MotorCmdType::RunPosition, dir, acc, rpm, pulses});
-        emit logMessage(QString("📍 位置模式 dir=%1 rpm=%2 pulses=%3")
-                            .arg(dir)
-                            .arg(rpm)
-                            .arg(pulses));
+        // emit logMessage(QString("📍 位置模式 dir=%1 rpm=%2 pulses=%3")
+        //                     .arg(dir)
+        //                     .arg(rpm)
+        //                     .arg(pulses));
     }
+}
+void MotorController::back() {
+    if (worker) {
+        worker->enqueue({MotorCmdType::Back});
+        emit logMessage(QString("回原点ing"));
+    }
+}
+int MotorController::readRegister(int addr) {
+    if (!worker)
+        return -1;
+    return worker->readRegister(addr);
 }

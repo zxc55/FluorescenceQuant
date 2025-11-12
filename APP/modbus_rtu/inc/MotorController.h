@@ -14,7 +14,7 @@ class MotorController : public QObject {
 public:
     explicit MotorController(QObject* parent = nullptr);
     ~MotorController();
-
+    Q_INVOKABLE int readRegister(int addr);
     Q_INVOKABLE void start();
     Q_INVOKABLE void stop();
     Q_INVOKABLE void enable();
@@ -23,7 +23,7 @@ public:
     Q_INVOKABLE void stopMotor();
     Q_INVOKABLE void runSpeed(int dir, int acc, int rpm);
     Q_INVOKABLE void runPosition(int dir, int acc, int rpm, int pulses);
-
+    Q_INVOKABLE void back();
 signals:
     void logMessage(const QString& msg);
 

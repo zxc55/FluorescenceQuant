@@ -1,19 +1,12 @@
 #pragma once
-#include <QDebug>
 #include <QSqlDatabase>
-#include <QSqlQuery>
-#include <QVariantMap>
 #include <QVector>
 
 #include "DTO.h"
-// =======================
-// 历史记录表（project_info）操作类
-// =======================
+
 class HistoryRepo {
 public:
-    // 插入一条历史记录
-    static bool insert(QSqlDatabase& db, const HistoryRow& row);
-
-    // 查询全部历史记录
-    static bool selectAll(QSqlDatabase& db, QVector<HistoryRow>& outRows);
+    static bool selectAll(QSqlDatabase db, QVector<HistoryRow>& out);  // 查询全部
+    static bool insert(QSqlDatabase db, const HistoryRow& row);        // 插入一条
+    static bool deleteById(QSqlDatabase db, int id);                   // 删除指定 ID
 };

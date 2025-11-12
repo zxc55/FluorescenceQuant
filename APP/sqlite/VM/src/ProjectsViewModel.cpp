@@ -1,5 +1,7 @@
 #include "ProjectsViewModel.h"
 
+#include "ProjectsRepo.h"
+
 // === 构造函数 ===
 ProjectsViewModel::ProjectsViewModel(QObject* parent)
     : QAbstractListModel(parent) {
@@ -155,68 +157,18 @@ QString ProjectsViewModel::getBatchById(int id) const {
     return QString();
 }
 // === QML 调用：插入检测记录 ===
-bool ProjectsViewModel::insertProjectInfo(const QVariantMap& info) {
-    if (!m_db.isOpen() && !openDatabase()) {
-        qWarning() << "❌ 数据库未打开，无法写入 project_info";
-        return false;
-    }
 
-    QSqlQuery q(m_db);
-    q.prepare(R"SQL(
-        INSERT INTO project_info (
-            project_id,
-            sample_no,
-            sample_source,
-            sample_name,
-            standard_curve,
-            batch_code,
-            detected_conc,
-            reference_value,
-            result,
-            detected_time,
-            detected_unit,
-            detected_person,
-            dilution_info
-        ) VALUES (
-            :project_id,
-            :sample_no,
-            :sample_source,
-            :sample_name,
-            :standard_curve,
-            :batch_code,
-            :detected_conc,
-            :reference_value,
-            :result,
-            :detected_time,
-            :detected_unit,
-            :detected_person,
-            :dilution_info
-        );
-    )SQL");
+// 小工具：同时兼容 camelCase / snake_case 取值
+static QVariant pick(const QVariantMap& m, const char* camel, const char* snake) {
+    auto it = m.find(camel);
+    if (it != m.end())
+        return it.value();
+    it = m.find(snake);
+    if (it != m.end())
+        return it.value();
+    return QVariant();
+}
 
-    // 一一绑定字段（与 Migration 表定义严格匹配）
-    q.bindValue(":project_id", info.value("project_id"));
-    q.bindValue(":sample_no", info.value("sample_no"));
-    q.bindValue(":sample_source", info.value("sample_source"));
-    q.bindValue(":sample_name", info.value("sample_name"));
-    q.bindValue(":standard_curve", info.value("standard_curve"));
-    q.bindValue(":batch_code", info.value("batch_code"));
-    q.bindValue(":detected_conc", info.value("detected_conc", 0.0));
-    q.bindValue(":reference_value", info.value("reference_value", 0.0));
-    q.bindValue(":result",
-                info.contains("result") && !info.value("result").toString().isEmpty()
-                    ? info.value("result")
-                    : QVariant("合格"));
-    q.bindValue(":detected_time", info.value("detected_time"));
-    q.bindValue(":detected_unit", info.value("detected_unit", "μg/kg"));
-    q.bindValue(":detected_person", info.value("detected_person"));
-    q.bindValue(":dilution_info", info.value("dilution_info", "1倍"));
-
-    if (!q.exec()) {
-        qWarning() << "❌ 插入 project_info 失败:" << q.lastError().text();
-        return false;
-    }
-
-    qInfo() << "✅ 成功写入 project_info 一条记录";
-    return true;
+bool ProjectsViewModel::insertProjectInfo(const QVariantMap& data) {
+    return ProjectsRepo::insertProjectInfo(m_db, data);
 }
