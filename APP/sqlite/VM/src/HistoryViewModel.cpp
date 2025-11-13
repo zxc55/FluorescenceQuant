@@ -175,3 +175,32 @@ bool HistoryViewModel::deleteById(int id) {
     m_worker->postDeleteHistory(id);
     return true;
 }
+// === QML 调用：根据 ID 获取详细信息 ===
+QVariantMap HistoryViewModel::getById(int id) const {
+    QVariantMap map;
+
+    for (const auto& r : m_rows) {
+        if (r.id == id) {
+            map["id"] = r.id;
+            map["projectId"] = r.projectId;
+            map["sampleNo"] = r.sampleNo;
+            map["sampleSource"] = r.sampleSource;
+            map["sampleName"] = r.sampleName;
+            map["standardCurve"] = r.standardCurve;
+            map["batchCode"] = r.batchCode;
+            map["detectedConc"] = r.detectedConc;
+            map["referenceValue"] = r.referenceValue;
+            map["result"] = r.result;
+            map["detectedTime"] = r.detectedTime;
+            map["detectedUnit"] = r.detectedUnit;
+            map["detectedPerson"] = r.detectedPerson;
+            map["dilutionInfo"] = r.dilutionInfo;
+            break;
+        }
+    }
+
+    if (map.isEmpty())
+        qWarning() << "[HistoryViewModel] getById: not found id=" << id;
+
+    return map;
+}

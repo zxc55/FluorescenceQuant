@@ -109,6 +109,7 @@ set(SOURCES
     APP/sqlite/VM/src/ProjectsViewModel.cpp
     APP/sqlite/VM/src/HistoryViewModel.cpp
     APP/sqlite/Repo/src/HistoryRepo.cpp
+    APP/MyQmlComponents/MyLineSeries/MyLineSeries.cpp
 )
 
 set(HEADERS
@@ -137,6 +138,8 @@ set(HEADERS
     APP/sqlite/VM/inc/ProjectsViewModel.h
     APP/sqlite/VM/inc/HistoryViewModel.h
     APP/sqlite/Repo/inc/HistoryRepo.h
+    APP/MyQmlComponents/MyLineSeries/MyLineSeries.h
+    
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}

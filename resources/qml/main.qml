@@ -17,6 +17,8 @@ ApplicationWindow {
     font.bold: true                  // 全部加粗
     font.pixelSize: 20               // 默认字号
     MotorController { id: motor }
+    property var selectedHistoryItem: {}   // 当前选中的历史记录
+    onCurrentPageChanged: console.log("📌 切换页面 currentPage =", currentPage)
     // ===== 主题 / 常量 =====
     readonly property color  brand:      "#3a7afe"
     readonly property color  textMain:   "#1f2937"
@@ -39,7 +41,7 @@ ApplicationWindow {
 
     // 虚拟键盘高度
     readonly property int kbHeight: Math.round(Qt.inputMethod.visible ? Qt.inputMethod.keyboardRectangle.height : 0)
-
+    
 
     property bool testRunning: false     // 防止重复检测
     property bool motorMoving: false     // 电机运行标志
@@ -214,14 +216,6 @@ function startTest() {
     })
     delayTimer.start()
 }
-
-
-
-
-
-
- 
-
     // 主体布局：左侧导航 + 右侧内容
     RowLayout {
         anchors {
@@ -430,7 +424,6 @@ function startTest() {
                 Loader { width: parent.width; height: sideBar.tileH; sourceComponent: actionButtonComp; onLoaded: { item.iconSource="qrc:/resources/icons/start.png" } }
             }
         }
-
         // ===== 右侧内容 =====
         Rectangle {
             id: rightPane
@@ -459,845 +452,941 @@ function startTest() {
                     anchors.fill: parent
                     anchors.margins: 18
                     currentIndex: currentPage
-
-
-
-
-
-// ==========================
-// 样品检测界面右侧
-// ==========================
-Item {
-    id: sampleTestPage
-    anchors.fill: parent
-    Column {
-        anchors.fill: parent
-        spacing: 10
-
-        // ===== 第一块：项目检测结果表格 =====
-        Rectangle {
-            id: resultTable
-            width: parent.width
-            height: 44 * 5
-            radius: 8
-            color: "#ffffff"
-            border.color: "#cfd6e2"
-            border.width: 1
-            clip: true
-
-            Column {
-                anchors.fill: parent
-
-                // === 表头 ===
-                Rectangle {
-                    id: resultHeader
-                    width: parent.width
-                    height: 44
-                    color: "#e6e8ec"
-                    border.color: "#c0c0c0"
-                    Row {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        spacing: 8
-                        Label { text: "项目名称"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
-                        Label { text: "浓度(μg/kg)"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
-                        Label { text: "结论"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
-                        Label { text: "参考值(μg/kg)"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
-                    }
-                }
-
-                // === 内容区 ===
-                Flickable {
-                    id: resultFlick
-                    anchors.top: resultHeader.bottom
-                    width: parent.width
-                    height: 44 * 4
-                    contentHeight: resultColumn.height
-                    clip: true
-
-                    Column {
-                        id: resultColumn
-                        width: parent.width
-
-                        // ✅ 这里以后可以替换成 C++ 模型，暂时固定3行演示
-                        Repeater {
-                            model: 3
-                            delegate: Rectangle {
-                                width: parent.width
-                                height: 44
-                                color: index % 2 === 0 ? "#ffffff" : "#f9fafb"
-                                border.color: "#e5e7eb"
-                                border.width: 1
-                                Row {
-                                    anchors.fill: parent
-                                    spacing: 8
-                                    Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                                    Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                                    Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                                    Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ===== 第二块：按钮 =====
-        Row {
-            width: parent.width
-            height: 50
-            spacing: 20
-            Button {
-                text: "样品信息";
-                width: (parent.width - 40) / 3 
-                onClicked: sampleInfoPopup.visible = true
-            }
-            Button { text: "详细信息"; width: (parent.width - 40) / 3 }
-            Button { text: "打印"; width: (parent.width - 40) / 3 }
-        }
-        Rectangle { height: 6; color: "transparent" } 
-        // ===== 第三块：样品信息表格（带表头） =====
-        Rectangle {
-            id: singleRowTable
-            width: parent.width
-            height: 44 * 2
-            radius: 8
-            color: "#ffffff"
-            border.color: "#cfd6e2"
-            border.width: 1
-            clip: false
-
-            Column {
-                anchors.fill: parent
-                spacing: 0
-                // === 表头 ===
-                Rectangle {
-                    id: sampleHeader
-                    width: parent.width
-                    height: 44
-                    color: "#e6e8ec"
-                    border.color: "#c0c0c0"
-                    Row {
+                    // ===== 0 样品检测 ===== 
+                    Item {
+                        id: sampleTestPage
                         anchors.fill: parent
-                        spacing: 8
-                        Label { text: "样品编号"; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
-                        Label { text: "项目名称"; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
-                        Label { text: "批次编码"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
-                        Label { text: "测试时间"; width: 300; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
-                    }
-                }
 
-                // === 内容行 ===
-                Rectangle {
-                    width: parent.width
-                    height: 44
-                    color: "#ffffff"
-                    border.color: "#e5e7eb"
-                    border.width: 1
-                    Row {
-                        anchors.fill: parent
-                        spacing: 8
-                        Label { text: ""; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                        Label { text: projectsVm.getNameById(projectPage.selectedId); width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                        Label { text: projectsVm.getBatchById(projectPage.selectedId); width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                        Label { text: Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm"); width: 300; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                    }
-                }
-            }
-        }
-
-            // ===== 第四块：选择框（带标题） =====
-            Row {
-                id: paramSelectRow
-                width: parent.width
-                height: 100                // ✅ 高度稍微增加，容纳标题文字
-                spacing: 40
-                anchors.topMargin: 8
-
-                // === 标准曲线选择 ===
-                Column {
-                    spacing: 6
-                    width: 220
-                    Label {
-                        text: "标准曲线选择"
-                        font.pixelSize: 18
-                        color: textMain
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    ComboBox {
-                        id: standardCurveBox
-                        width: parent.width
-                        model: ["粮食谷物", "加工副产物", "配合饲料"]
-                        currentIndex: 0
-                        font.pixelSize: 18
-                    }
-                }
-
-                // === 超曲线范围稀释 ===
-                Column {
-                    spacing: 6
-                    width: 220
-                    Label {
-                        text: "超曲线范围稀释"
-                        font.pixelSize: 18
-                        color: textMain
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    ComboBox {
-                        id: dilutionBox
-                        width: parent.width
-                        model: ["1", "5"]
-                        currentIndex: 0
-                        font.pixelSize: 18
-                    }
-                }
-
-                // === 参考值选择 ===
-                Column {
-                    spacing: 6
-                    width: 220
-                    Label {
-                        text: "参考值选择"
-                        font.pixelSize: 18
-                        color: textMain
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    TextField {
-                        id: refValueField
-                        width: parent.width
-                        placeholderText: "参考值(μg/kg)"
-                        inputMethodHints: Qt.ImhFormattedNumbersOnly
-                        font.pixelSize: 18
-                    }
-                }
-            }
-
-    }
-}
-
-
-
-                    // 1 项目管理（使用 ListView + header，消除表头与首行之间空白）
-// ===== 1 项目管理（带滑动表格） =====
-Item {
-    id: projectPage
-    property int selectedId: 1   // 当前选中行
-
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 12
-
-        // === 标题栏 ===
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 12
-            Label { text: "项目管理"; font.pixelSize: 24; font.bold: true; color: textMain }
-            Item { Layout.fillWidth: true }
-            Button { text: "刷新"; onClicked: projectsVm.refresh() }
-            Button {
-                text: "删除"
-                enabled: projectPage.selectedId > 0
-                onClicked: {
-                    if (projectPage.selectedId > 0) {
-                        projectsVm.deleteById(projectPage.selectedId)
-                        projectPage.selectedId = -1
-                        projectsVm.refresh()
-                    }
-                }
-            }
-        }
-
-        // === 外层矩形容器 ===
-        Rectangle {
-            id: projArea
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            radius: 8
-            color: "#ffffff"
-            border.color: "#d1d5db"
-            border.width: 1
-            clip: true
-
-            // === 列宽定义 ===
-            readonly property int colId: 60
-            readonly property int colName: 220
-            readonly property int colBatch: 180
-            readonly property int colUpdate: 220
-
-// === 固定表头 ===
-Rectangle {
-    id: header
-    width: parent.width
-    height: 42
-    color: "#f3f4f6"
-    border.color: "#d1d5db"
-    border.width: 1
-
-    Row {
-        anchors.fill: parent
-        anchors.margins: 8
-        spacing: 8
-
-        Rectangle {
-            width: projArea.colId
-            height: parent.height
-            color: "transparent"
-            Label {
-                anchors.centerIn: parent
-                text: "序号"
-                color: textMain
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-        }
-
-        Rectangle {
-            width: projArea.colName
-            height: parent.height
-            color: "transparent"
-            Label {
-                anchors.centerIn: parent
-                text: "项目名称"
-                color: textMain
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-        }
-
-        Rectangle {
-            width: projArea.colBatch
-            height: parent.height
-            color: "transparent"
-            Label {
-                anchors.centerIn: parent
-                text: "批次编码"
-                color: textMain
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-        }
-
-        Rectangle {
-            width: projArea.colUpdate
-            height: parent.height
-            color: "transparent"
-            Label {
-                anchors.centerIn: parent
-                text: "更新时间"
-                color: textMain
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-        }
-    }
-}
-
-
-            // === 内容滚动区 ===
-            Flickable {
-                id: flickProject    
-                anchors.top: header.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                clip: true
-                boundsBehavior: Flickable.DragAndOvershootBounds
-                interactive: true
-
-                // ✅ 内容高度至少比 Flickable 高 1 像素，这样即使少数据也能拖动
-                contentHeight: Math.max(contentCol.height, flickProject.height + 1)
-
-                Column {
-                    id: contentCol
-                    width: flickProject.width
-
-// === 数据行 ===
-Repeater {
-    id: dataRepeater
-    model: projectsVm
-
-    delegate: Rectangle {
-        width: parent.width
-        height: 44
-        color: (projectPage.selectedId === rid)
-                ? "#dbeafe"                        // 选中行浅蓝色
-                : (index % 2 === 0 ? "#ffffff" : "#f9fafb") // 交替行底色
-        border.color: "#e5e7eb"
-        border.width: 1
-
-        MouseArea {
-            anchors.fill: parent
-            onClicked: projectPage.selectedId = rid
-            hoverEnabled: true
-            onEntered: parent.color = (projectPage.selectedId === rid) ? "#dbeafe" : "#eef2ff"
-            onExited: parent.color = (projectPage.selectedId === rid)
-                    ? "#dbeafe"
-                    : (index % 2 === 0 ? "#ffffff" : "#f9fafb")
-        }
-
-        Row {
-            anchors.fill: parent
-            anchors.margins: 8
-            spacing: 8
-
-            // === 左侧选择框 ===
-            Rectangle {
-                width: 24
-                height: 24
-                radius: 4
-                border.color: (projectPage.selectedId === rid) ? "#3b82f6" : "#9ca3af"
-                border.width: 1
-                color: (projectPage.selectedId === rid) ? "#3b82f6" : "transparent"
-                anchors.verticalCenter: parent.verticalCenter
-                Text {
-                    visible: projectPage.selectedId === rid
-                    text: "✔"
-                    color: "white"
-                    anchors.centerIn: parent
-                    font.pixelSize: 18
-                }
-            }
-
-            // === 每列文字都居中 ===
-            Rectangle {
-                width: projArea.colId; height: parent.height; color: "transparent"
-                Label {
-                    anchors.centerIn: parent
-                    text: rid
-                    color: textMain
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-
-            Rectangle {
-                width: projArea.colName; height: parent.height; color: "transparent"
-                Label {
-                    anchors.centerIn: parent
-                    text: name
-                    color: textMain
-                    font.bold: true
-                    elide: Label.ElideRight
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-
-            Rectangle {
-                width: projArea.colBatch; height: parent.height; color: "transparent"
-                Label {
-                    anchors.centerIn: parent
-                    text: batch
-                    color: textMain
-                    font.bold: true
-                    elide: Label.ElideRight
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-
-            Rectangle {
-                width: projArea.colUpdate; height: parent.height; color: "transparent"
-                Label {
-                    anchors.centerIn: parent
-                    text: updatedAt
-                    color: textSub
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-        }
-    }
-}
-
-
-                    // === 空白补齐行（带横线）===
-                    Repeater {
-                        model: Math.max(0, 8 - dataRepeater.count)
-                        delegate: Rectangle {
-                            width: parent.width
-                            height: 44
-                            color: (index % 2 === 0 ? "#ffffff" : "#f9fafb")
-                            border.color: "#e5e7eb"
-                            border.width: 1
-
-                            Row {
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 8
-                                Rectangle {
-                                    width: 24; height: 24; radius: 4
-                                    border.color: "#d1d5db"; border.width: 1
-                                    color: "transparent"
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                                Rectangle { width: projArea.colId; height: parent.height; color: "transparent" }
-                                Rectangle { width: projArea.colName; height: parent.height; color: "transparent" }
-                                Rectangle { width: projArea.colBatch; height: parent.height; color: "transparent" }
-                                Rectangle { width: projArea.colUpdate; height: parent.height; color: "transparent" }
-                            }
-                        }
-                    }
-                }
-
-                // === 滚动条 ===
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AlwaysOn
-                    interactive: true
-                }
-            }
-        }
-    }
-}
-
-// ===== 2 历史记录页（带选中删除）=====
-Item {
-    id: historyPage
-    anchors.fill: parent
-
-    // 列宽 & 行高
-    property int rowHeight: 44
-    property int w_sel: 44
-    property int w_id: 80
-    property int w_pid: 80
-    property int w_no: 120
-    property int w_src: 120
-    property int w_name: 140
-    property int w_curve: 120
-    property int w_batch: 100
-    property int w_conc: 100
-    property int w_ref: 100
-    property int w_res: 100
-    property int w_time: 160
-    property int w_unit: 100
-    property int w_person: 120
-    property int w_dilution: 120
-    property int totalWidth: w_sel + w_id + w_pid + w_no + w_src + w_name + w_curve +
-                             w_batch + w_conc + w_ref + w_res + w_time +
-                             w_unit + w_person + w_dilution
-
-    // 选中集合
-    property var selectedIds: []
-
-    function isSelected(recId) {
-        return selectedIds.indexOf(recId) !== -1
-    }
-    function setSelected(recId, on) {
-        var arr = selectedIds.slice(0)
-        var pos = arr.indexOf(recId)
-        if (on && pos === -1) arr.push(recId)
-        if (!on && pos !== -1) arr.splice(pos, 1)
-        selectedIds = arr
-    }
-    function toggleSelected(recId) { setSelected(recId, !isSelected(recId)) }
-    function selectAllOnPage(on) {
-        // 遍历当前可见的 model
-        for (var i = 0; i < listView.count; ++i) {
-            var it = listView.itemAtIndex(i)
-            if (it && it.modelId !== undefined)
-                setSelected(it.modelId, on)
-        }
-    }
-    function deleteSelected() {
-        if (selectedIds.length === 0) return
-        for (var i = 0; i < selectedIds.length; ++i) {
-            if (historyVm && historyVm.deleteById)
-                historyVm.deleteById(selectedIds[i])
-        }
-        selectedIds = []
-        if (historyVm && historyVm.refresh) historyVm.refresh()
-    }
-
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 8
-
-        // === 顶部栏 ===
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 12
-            Label { text: "历史记录"; font.pixelSize: 24; font.bold: true; color: "#111827" }
-            Item { Layout.fillWidth: true }
-            Button { text: "刷新"; onClicked: historyVm.refresh() }
-            Button {
-                text: "删除选中"
-                enabled: historyPage.selectedIds.length > 0
-                onClicked: historyPage.deleteSelected()
-            }
-            Button {
-                text: "导出CSV"
-                onClicked: {
-                    let name = "history_" + new Date().toLocaleString().replace(/[ :\/]/g, "_") + ".csv"
-                    let filePath = "/mnt/SDCARD/export/" + name
-                    historyVm.exportCsv(filePath)
-                    console.log("[CSV] 导出:", filePath)
-                }
-            }
-        }
-
-        // === 表格主体 ===
-        Rectangle {
-            id: his_table
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            radius: 8
-            color: "#ffffff"
-            border.color: "#d1d5db"
-            border.width: 1
-            clip: true
-
-            // === 表头（固定） ===
-            Rectangle {
-                id: headerBar
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: historyPage.rowHeight
-                color: "#f3f4f6"
-                border.color: "#d1d5db"
-                border.width: 1
-                clip: true
-
-                Row {
-                    id: headerRow
-                    x: -bodyFlick.contentX              // 跟随内容横向滚动
-                    width: historyPage.totalWidth
-                    height: parent.height
-                    spacing: 0
-
-                    // 选择列（全选）
-                    Rectangle {
-                        width: historyPage.w_sel; height: parent.height; color: "transparent"
-                        CheckBox {
-                            id: cbSelectAll
-                            anchors.centerIn: parent
-                            tristate: false
-                            checked: (historyPage.selectedIds.length > 0
-                                      && historyPage.selectedIds.length === listView.count
-                                      && listView.count > 0)
-                            onClicked: historyPage.selectAllOnPage(checked)
-                        }
-                    }
-                    Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "ID";       font.bold: true } }
-                    Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "项目ID";   font.bold: true } }
-                    Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品编号"; font.bold: true } }
-                    Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品来源"; font.bold: true } }
-                    Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品名称"; font.bold: true } }
-                    Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "标准曲线"; font.bold: true } }
-                    Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "批次";     font.bold: true } }
-                    Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "浓度";     font.bold: true } }
-                    Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "参考";     font.bold: true } }
-                    Rectangle { width: historyPage.w_res;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "结果";     font.bold: true } }
-                    Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "检测时间"; font.bold: true } }
-                    Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "单位";     font.bold: true } }
-                    Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "检测人";   font.bold: true } }
-                    Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "稀释倍数"; font.bold: true } }
-                }
-            }
-
-            // === 内容区 ===
-            Flickable {
-                id: bodyFlick
-                anchors.top: headerBar.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                clip: true
-
-                contentWidth: historyPage.totalWidth
-                contentHeight: listView.contentHeight
-
-                ListView {
-                    id: listView
-                    x: 0
-                    y: 0
-                    width: historyPage.totalWidth
-                    height: bodyFlick.height
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    spacing: 0
-                    model: (typeof historyVm !== "undefined" && historyVm) ? historyVm : 0
-
-                    delegate: Rectangle {
-                        // 把 model 中的 id 单独存到属性，避免和 QML 的 id 关键字混淆
-                        property var modelId: id
-
-                        width: historyPage.totalWidth
-                        height: historyPage.rowHeight
-                        color: historyPage.isSelected(modelId) ? "#dbeafe" :
-                               (index % 2 === 0 ? "#ffffff" : "#f9fafb")
-                        border.color: "#e5e7eb"
-                        border.width: 1
-
-                        Row {
-                            width: parent.width
-                            height: parent.height
-                            spacing: 0
-
-                            // 选择列
-                            Rectangle {
-                                width: historyPage.w_sel; height: parent.height; color: "transparent"
-                                CheckBox {
-                                    anchors.centerIn: parent
-                                    checked: historyPage.isSelected(modelId)
-                                    onClicked: historyPage.toggleSelected(modelId)
-                                }
-                            }
-
-                            // 其余列
-                            Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: modelId } }
-                            Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectId } }
-                            Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleNo } }
-                            Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleSource } }
-                            Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleName } }
-                            Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: standardCurve } }
-                            Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: batchCode } }
-                            Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: Number(detectedConc).toFixed(2) } }
-                            Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: Number(referenceValue).toFixed(2) } }
-                            Rectangle {
-                                width: historyPage.w_res; height: parent.height; color: "transparent"
-                                Text { anchors.centerIn: parent; text: result; color: result === "合格" ? "green" : "red" }
-                            }
-                            Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedTime } }
-                            Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedUnit } }
-                            Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedPerson } }
-                            Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: dilutionInfo } }
-                        }
-
-                        MouseArea {
+                        Column {
                             anchors.fill: parent
-                            onClicked: historyPage.toggleSelected(modelId)
+                            spacing: 10
+
+                            // ===== 第一块：项目检测结果表格 =====
+                            Rectangle {
+                                id: resultTable
+                                width: parent.width
+                                height: 44 * 5
+                                radius: 8
+                                color: "#ffffff"
+                                border.color: "#cfd6e2"
+                                border.width: 1
+                                clip: true
+
+                                Item {
+                                    width: parent.width
+                                    height: parent.height
+
+                                    // === 表头 ===
+                                    Rectangle {
+                                        id: resultHeader
+                                        width: parent.width
+                                        height: 44
+                                        color: "#e6e8ec"
+                                        border.color: "#c0c0c0"
+
+                                        Row {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            spacing: 8
+
+                                            Label {
+                                                text: "项目名称"
+                                                width: 200
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                font.bold: true
+                                            }
+                                            Label {
+                                                text: "浓度(μg/kg)"
+                                                width: 200
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                font.bold: true
+                                            }
+                                            Label {
+                                                text: "结论"
+                                                width: 200
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                font.bold: true
+                                            }
+                                            Label {
+                                                text: "参考值(μg/kg)"
+                                                width: 200
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                font.bold: true
+                                            }
+                                        }
+                                    }
+
+                                    // === 内容区 ===
+                                    Flickable {
+                                        id: resultFlick
+                                        anchors.top: resultHeader.bottom
+                                        width: parent.width
+                                        height: 44 * 4
+                                        contentHeight: resultColumn.height
+                                        clip: true
+
+                                        Item {
+                                            id: resultColumn
+                                            width: parent.width
+
+                                            // ✅ 这里以后可以替换成 C++ 模型，暂时固定3行演示
+                                            Repeater {
+                                                model: 3
+                                                delegate: Rectangle {
+                                                    width: parent.width
+                                                    height: 44
+                                                    color: index % 2 === 0 ? "#ffffff" : "#f9fafb"
+                                                    border.color: "#e5e7eb"
+                                                    border.width: 1
+
+                                                    Row {
+                                                        anchors.fill: parent
+                                                        spacing: 8
+
+                                                        Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                                        Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                                        Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                                        Label { text: ""; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ===== 第二块：按钮 =====
+                            Row {
+                                width: parent.width
+                                height: 50
+                                spacing: 20
+
+                                Button {
+                                    text: "样品信息"
+                                    width: (parent.width - 40) / 3
+                                    onClicked: sampleInfoPopup.visible = true
+                                }
+                                Button {
+                                    text: "详细信息"
+                                    width: (parent.width - 40) / 3
+                                }
+                                Button {
+                                    text: "打印"
+                                    width: (parent.width - 40) / 3
+                                }
+                            }
+
+                            Rectangle { height: 6; color: "transparent" }
+
+                            // ===== 第三块：样品信息表格（带表头） =====
+                            Rectangle {
+                                id: singleRowTable
+                                width: parent.width
+                                height: 44 * 2
+                                radius: 8
+                                color: "#ffffff"
+                                border.color: "#cfd6e2"
+                                border.width: 1
+                                clip: false
+
+                                Column {
+                                    anchors.fill: parent
+                                    spacing: 0
+
+                                    // === 表头 ===
+                                    Rectangle {
+                                        id: sampleHeader
+                                        width: parent.width
+                                        height: 44
+                                        color: "#e6e8ec"
+                                        border.color: "#c0c0c0"
+
+                                        Row {
+                                            anchors.fill: parent
+                                            spacing: 8
+
+                                            Label { text: "样品编号"; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                                            Label { text: "项目名称"; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                                            Label { text: "批次编码"; width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                                            Label { text: "测试时间"; width: 300; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter; font.bold: true }
+                                        }
+                                    }
+
+                                    // === 内容行 ===
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 44
+                                        color: "#ffffff"
+                                        border.color: "#e5e7eb"
+                                        border.width: 1
+
+                                        Row {
+                                            anchors.fill: parent
+                                            spacing: 8
+
+                                            Label { text: ""; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                            Label { text: projectsVm.getNameById(projectPage.selectedId); width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                            Label { text: projectsVm.getBatchById(projectPage.selectedId); width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                            Label { text: Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm"); width: 300; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                        }
+                                    }
+                                }
+
+                                // ===== 第四块：选择框（带标题） =====
+                                Row {
+                                    id: paramSelectRow
+                                    width: parent.width
+                                    height: 100
+                                    spacing: 40
+                                    anchors.topMargin: 8
+
+                                    // === 标准曲线选择 ===
+                                    Column {
+                                        spacing: 6
+                                        width: 220
+                                        Label {
+                                            text: "标准曲线选择"
+                                            font.pixelSize: 18
+                                            color: textMain
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                        ComboBox {
+                                            id: standardCurveBox
+                                            width: parent.width
+                                            model: ["粮食谷物", "加工副产物", "配合饲料"]
+                                            currentIndex: 0
+                                            font.pixelSize: 18
+                                        }
+                                    }
+
+                                    // === 超曲线范围稀释 ===
+                                    Column {
+                                        spacing: 6
+                                        width: 220
+                                        Label {
+                                            text: "超曲线范围稀释"
+                                            font.pixelSize: 18
+                                            color: textMain
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                        ComboBox {
+                                            id: dilutionBox
+                                            width: parent.width
+                                            model: ["1", "5"]
+                                            currentIndex: 0
+                                            font.pixelSize: 18
+                                        }
+                                    }
+
+                                    // === 参考值选择 ===
+                                    Column {
+                                        spacing: 6
+                                        width: 220
+                                        Label {
+                                            text: "参考值选择"
+                                            font.pixelSize: 18
+                                            color: textMain
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                        TextField {
+                                            id: refValueField
+                                            width: parent.width
+                                            placeholderText: "参考值(μg/kg)"
+                                            inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                            font.pixelSize: 18
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    // 无数据占位
-                    Rectangle {
+                    // ===== 1 项目管理（带滑动表格） =====
+                    Item {
+                        id: projectPage
+                        property int selectedId: 1 // 当前选中行
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 12
+
+                            // === 标题栏 ===
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                Label {
+                                    text: "项目管理"
+                                    font.pixelSize: 24
+                                    font.bold: true
+                                    color: textMain
+                                }
+                                Item { Layout.fillWidth: true }
+                                Button { text: "刷新"; onClicked: projectsVm.refresh() }
+                                Button {
+                                    text: "删除"
+                                    enabled: projectPage.selectedId > 0
+                                    onClicked: {
+                                        if (projectPage.selectedId > 0) {
+                                            projectsVm.deleteById(projectPage.selectedId)
+                                            projectPage.selectedId = -1
+                                            projectsVm.refresh()
+                                        }
+                                    }
+                                }
+                            }
+
+                            // === 外层矩形容器 ===
+                            Rectangle {
+                                id: projArea
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 8
+                                color: "#ffffff"
+                                border.color: "#d1d5db"
+                                border.width: 1
+                                clip: true
+
+                                // === 列宽定义 ===
+                                readonly property int colId: 60
+                                readonly property int colName: 220
+                                readonly property int colBatch: 180
+                                readonly property int colUpdate: 220
+
+                                // === 固定表头 ===
+                                Rectangle {
+                                    id: header
+                                    width: parent.width
+                                    height: 42
+                                    color: "#f3f4f6"
+                                    border.color: "#d1d5db"
+                                    border.width: 1
+
+                                    Row {
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        spacing: 8
+
+                                        Rectangle {
+                                            width: projArea.colId
+                                            height: parent.height
+                                            color: "transparent"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "序号"
+                                                color: textMain
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: projArea.colName
+                                            height: parent.height
+                                            color: "transparent"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "项目名称"
+                                                color: textMain
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: projArea.colBatch
+                                            height: parent.height
+                                            color: "transparent"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "批次编码"
+                                                color: textMain
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: projArea.colUpdate
+                                            height: parent.height
+                                            color: "transparent"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "更新时间"
+                                                color: textMain
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // === 内容滚动区 ===
+                                Flickable {
+                                    id: flickProject
+                                    anchors.top: header.bottom
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    clip: true
+                                    boundsBehavior: Flickable.DragAndOvershootBounds
+                                    interactive: true
+                                    contentHeight: Math.max(contentCol.height, flickProject.height + 1)
+
+                                    Column {
+                                        id: contentCol
+                                        width: flickProject.width
+
+                                        // === 数据行 ===
+                                        Repeater {
+                                            id: dataRepeater
+                                            model: projectsVm
+
+                                            delegate: Rectangle {
+                                                width: parent.width
+                                                height: 44
+                                                color: (projectPage.selectedId === rid)
+                                                    ? "#dbeafe"
+                                                    : (index % 2 === 0 ? "#ffffff" : "#f9fafb")
+                                                border.color: "#e5e7eb"
+                                                border.width: 1
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: projectPage.selectedId = rid
+                                                    hoverEnabled: true
+                                                    onEntered: parent.color = (projectPage.selectedId === rid) ? "#dbeafe" : "#eef2ff"
+                                                    onExited: parent.color = (projectPage.selectedId === rid)
+                                                        ? "#dbeafe"
+                                                        : (index % 2 === 0 ? "#ffffff" : "#f9fafb")
+                                                }
+
+                                                Row {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 8
+                                                    spacing: 8
+                                                    // === 左侧选择框 ===
+                                                    Rectangle {
+                                                        width: 24
+                                                        height: 24
+                                                        radius: 4
+                                                        border.color: (projectPage.selectedId === rid) ? "#3b82f6" : "#9ca3af"
+                                                        border.width: 1
+                                                        color: (projectPage.selectedId === rid) ? "#3b82f6" : "transparent"
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        Text {
+                                                            visible: projectPage.selectedId === rid
+                                                            text: "✔"
+                                                            color: "white"
+                                                            anchors.centerIn: parent
+                                                            font.pixelSize: 18
+                                                        }
+                                                    }
+
+                                                    // === 每列文字 ===
+                                                    Rectangle {
+                                                        width: projArea.colId
+                                                        height: parent.height
+                                                        color: "transparent"
+                                                        Label {
+                                                            anchors.centerIn: parent
+                                                            text: rid
+                                                            color: textMain
+                                                            font.bold: true
+                                                            horizontalAlignment: Text.AlignHCenter
+                                                            verticalAlignment: Text.AlignVCenter
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        width: projArea.colName
+                                                        height: parent.height
+                                                        color: "transparent"
+                                                        Label {
+                                                            anchors.centerIn: parent
+                                                            text: name
+                                                            color: textMain
+                                                            font.bold: true
+                                                            elide: Label.ElideRight
+                                                            horizontalAlignment: Text.AlignHCenter
+                                                            verticalAlignment: Text.AlignVCenter
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        width: projArea.colBatch
+                                                        height: parent.height
+                                                        color: "transparent"
+                                                        Label {
+                                                            anchors.centerIn: parent
+                                                            text: batch
+                                                            color: textMain
+                                                            font.bold: true
+                                                            elide: Label.ElideRight
+                                                            horizontalAlignment: Text.AlignHCenter
+                                                            verticalAlignment: Text.AlignVCenter
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        width: projArea.colUpdate
+                                                        height: parent.height
+                                                        color: "transparent"
+                                                        Label {
+                                                            anchors.centerIn: parent
+                                                            text: updatedAt
+                                                            color: textSub
+                                                            font.bold: true
+                                                            horizontalAlignment: Text.AlignHCenter
+                                                            verticalAlignment: Text.AlignVCenter
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // === 空白补齐行 ===
+                                        Repeater {
+                                            model: Math.max(0, 8 - dataRepeater.count)
+                                            delegate: Rectangle {
+                                                width: parent.width
+                                                height: 44
+                                                color: (index % 2 === 0 ? "#ffffff" : "#f9fafb")
+                                                border.color: "#e5e7eb"
+                                                border.width: 1
+                                                Row {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 8
+                                                    spacing: 8
+                                                    Rectangle {
+                                                        width: 24
+                                                        height: 24
+                                                        radius: 4
+                                                        border.color: "#d1d5db"
+                                                        border.width: 1
+                                                        color: "transparent"
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                    Rectangle { width: projArea.colId; height: parent.height; color: "transparent" }
+                                                    Rectangle { width: projArea.colName; height: parent.height; color: "transparent" }
+                                                    Rectangle { width: projArea.colBatch; height: parent.height; color: "transparent" }
+                                                    Rectangle { width: projArea.colUpdate; height: parent.height; color: "transparent" }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // === 滚动条 ===
+                                    ScrollBar.vertical: ScrollBar {
+                                        policy: ScrollBar.AlwaysOn
+                                        interactive: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                
+                    // ===== 2 历史记录页（带选中删除）=====
+                    Item {
+                        id: historyPage
                         anchors.fill: parent
-                        visible: listView.count === 0
-                        color: "transparent"
-                        Text { anchors.centerIn: parent; text: "暂无数据"; color: "#909399" }
+
+                        // 列宽 & 行高
+                        property int rowHeight: 44
+                        property int w_sel: 44
+                        property int w_id: 80
+                        property int w_pid: 80
+                        property int w_no: 120
+                        property int w_src: 120
+                        property int w_name: 140
+                        property int w_curve: 120
+                        property int w_batch: 100
+                        property int w_conc: 100
+                        property int w_ref: 100
+                        property int w_res: 100
+                        property int w_time: 160
+                        property int w_unit: 100
+                        property int w_person: 120
+                        property int w_dilution: 120
+                        property int totalWidth: w_sel + w_id + w_pid + w_no + w_src + w_name + w_curve +
+                                                w_batch + w_conc + w_ref + w_res + w_time +
+                                                w_unit + w_person + w_dilution
+
+                        // 选中集合
+                        property var selectedIds: []
+
+                        function isSelected(recId) {
+                            return selectedIds.indexOf(recId) !== -1
+                        }
+                        function setSelected(recId, on) {
+                            var arr = selectedIds.slice(0)
+                            var pos = arr.indexOf(recId)
+                            if (on && pos === -1) arr.push(recId)
+                            if (!on && pos !== -1) arr.splice(pos, 1)
+                            selectedIds = arr
+                        }
+                        function toggleSelected(recId) { setSelected(recId, !isSelected(recId)) }
+                        function selectAllOnPage(on) {
+                            // 遍历当前可见的 model
+                            for (var i = 0; i < listView.count; ++i) {
+                                var it = listView.itemAtIndex(i)
+                                if (it && it.modelId !== undefined)
+                                    setSelected(it.modelId, on)
+                            }
+                        }
+                        function deleteSelected() {
+                            if (selectedIds.length === 0) return
+                            for (var i = 0; i < selectedIds.length; ++i) {
+                                if (historyVm && historyVm.deleteById)
+                                    historyVm.deleteById(selectedIds[i])
+                            }
+                            selectedIds = []
+                            if (historyVm && historyVm.refresh) historyVm.refresh()
+                        }
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 8
+
+                            // === 顶部栏 ===
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                Label {
+                                    text: "历史记录"
+                                    font.pixelSize: 24
+                                    font.bold: true
+                                    color: "#111827"
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+
+                                Item { Layout.fillWidth: true }  // 左右分隔
+
+                                // --- 左侧一组操作按钮 ---
+                                RowLayout {
+                                    spacing: 10
+                                    Button { text: "刷新"; onClicked: historyVm.refresh() }
+                                    Button {
+                                        text: "删除选中"
+                                        enabled: historyPage.selectedIds.length > 0
+                                        onClicked: historyPage.deleteSelected()
+                                    }
+                                    Button {
+                                        text: "导出 CSV"
+                                        onClicked: {
+                                            let name = "history_" + new Date().toLocaleString().replace(/[ :\/]/g, "_") + ".csv"
+                                            let filePath = "/mnt/SDCARD/export/" + name
+                                            historyVm.exportCsv(filePath)
+                                            console.log("[CSV] 导出:", filePath)
+                                        }
+                                    }
+                                    // ✅ 新增：详细信息按钮
+                                    Button {
+                                        text: "详细信息"
+                                        enabled: historyPage.selectedIds.length === 1
+                                        onClicked: {
+                                            if (historyPage.selectedIds.length === 1) {
+                                                let id = historyPage.selectedIds[0]
+                                                selectedHistoryItem = historyVm.getById(id)
+                                                currentPage = 3  // 跳到详细信息页
+                                            } else {
+                                                console.log("⚠️ 请选择一条记录查看详细信息")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+
+                            // === 表格主体 ===
+                            Rectangle {
+                                id: his_table
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 8
+                                color: "#ffffff"
+                                border.color: "#d1d5db"
+                                border.width: 1
+                                clip: true
+
+                                // === 表头（固定） ===
+                                Rectangle {
+                                    id: headerBar
+                                    anchors.top: parent.top
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    height: historyPage.rowHeight
+                                    color: "#f3f4f6"
+                                    border.color: "#d1d5db"
+                                    border.width: 1
+                                    clip: true
+
+                                    Row {
+                                        id: headerRow
+                                        x: -bodyFlick.contentX              // 跟随内容横向滚动
+                                        width: historyPage.totalWidth
+                                        height: parent.height
+                                        spacing: 0
+
+                                        // 选择列（全选）
+                                        Rectangle {
+                                            width: historyPage.w_sel; height: parent.height; color: "transparent"
+                                            CheckBox {
+                                                id: cbSelectAll
+                                                anchors.centerIn: parent
+                                                tristate: false
+                                                checked: (historyPage.selectedIds.length > 0
+                                                        && historyPage.selectedIds.length === listView.count
+                                                        && listView.count > 0)
+                                                onClicked: historyPage.selectAllOnPage(checked)
+                                            }
+                                        }
+                                        Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "ID";       font.bold: true } }
+                                        Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "项目ID";   font.bold: true } }
+                                        Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品编号"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品来源"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品名称"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "标准曲线"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "批次";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "浓度";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "参考";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_res;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "结果";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "检测时间"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "单位";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "检测人";   font.bold: true } }
+                                        Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "稀释倍数"; font.bold: true } }
+                                    }
+                                }
+
+                                // === 内容区 ===
+                                Flickable {
+                                    id: bodyFlick
+                                    anchors.top: headerBar.bottom
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    clip: true
+
+                                    contentWidth: historyPage.totalWidth
+                                    contentHeight: listView.contentHeight
+
+                                    ListView {
+                                        id: listView
+                                        x: 0
+                                        y: 0
+                                        width: historyPage.totalWidth
+                                        height: bodyFlick.height
+                                        clip: true
+                                        boundsBehavior: Flickable.StopAtBounds
+                                        spacing: 0
+                                        model: (typeof historyVm !== "undefined" && historyVm) ? historyVm : 0
+
+                                        delegate: Rectangle {
+                                            // 把 model 中的 id 单独存到属性，避免和 QML 的 id 关键字混淆
+                                            property var modelId: id
+
+                                            width: historyPage.totalWidth
+                                            height: historyPage.rowHeight
+                                            color: historyPage.isSelected(modelId) ? "#dbeafe" :
+                                                (index % 2 === 0 ? "#ffffff" : "#f9fafb")
+                                            border.color: "#e5e7eb"
+                                            border.width: 1
+
+                                            Row {
+                                                width: parent.width
+                                                height: parent.height
+                                                spacing: 0
+
+                                                // 选择列
+                                                Rectangle {
+                                                    width: historyPage.w_sel; height: parent.height; color: "transparent"
+                                                    CheckBox {
+                                                        anchors.centerIn: parent
+                                                        checked: historyPage.isSelected(modelId)
+                                                        onClicked: historyPage.toggleSelected(modelId)
+                                                    }
+                                                }
+
+                                                // 其余列
+                                                Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: modelId } }
+                                                Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectId } }
+                                                Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleNo } }
+                                                Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleSource } }
+                                                Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleName } }
+                                                Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: standardCurve } }
+                                                Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: batchCode } }
+                                                Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: Number(detectedConc).toFixed(2) } }
+                                                Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: Number(referenceValue).toFixed(2) } }
+                                                Rectangle {
+                                                    width: historyPage.w_res; height: parent.height; color: "transparent"
+                                                    Text { anchors.centerIn: parent; text: result; color: result === "合格" ? "green" : "red" }
+                                                }
+                                                Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedTime } }
+                                                Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedUnit } }
+                                                Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedPerson } }
+                                                Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: dilutionInfo } }
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: historyPage.toggleSelected(modelId)
+                                            }
+                                        }
+
+                                        // 无数据占位
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            visible: listView.count === 0
+                                            color: "transparent"
+                                            Text { anchors.centerIn: parent; text: "暂无数据"; color: "#909399" }
+                                        }
+                                    }
+
+                                    // 滚动条
+                                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                                    ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
+                                }
+                            }
+                        }
+
+                        Component.onCompleted: {
+                            if (typeof historyVm !== "undefined" && historyVm && historyVm.refresh)
+                                historyVm.refresh()
+                        }
+
+                    }
+                 }
+            }///
+                Item {
+                            id: detailPage
+                            anchors {
+                                left: rightPane.left
+                                right: rightPane.right
+                                top: rightPane.top
+                                bottom: rightPane.bottom
+                            }
+                            visible: currentPage === 3
+                            z: 999
+
+                            Loader {
+                                id: detailLoader
+                                anchors.fill: parent
+                                source: "qrc:/qml/DetailView.qml"
+                                active: currentPage === 3
+
+                                onLoaded: {
+                                    item.record = selectedHistoryItem
+                                    item.goBack.connect(() => currentPage = 2)
+                                }
+                            }
+                        }
                     }
                 }
+            // ===== 开始检查弹层（覆盖全屏，卡片可上下微调）=====
+            Rectangle {
+                id: overlayPopup2
+                anchors.fill: parent             // 一定要覆盖整个窗口
+                visible: overlayVisible          // 仍然用你的这三个变量
+                color: "#CC000000"
+                z: 10000                         // 保证最上层
 
-                // 滚动条
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
-            }
-        }
-    }
+                // 点击背景关闭（忙碌时禁用）
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: overlayVisible
+                    onClicked: { if (!overlayBusy) overlayVisible = false }
+                }
 
-    Component.onCompleted: {
-        if (typeof historyVm !== "undefined" && historyVm && historyVm.refresh)
-            historyVm.refresh()
-    }
-}
+                // —— 想上下挪一点，就改这个偏移量（负数上移，正数下移）——
+                readonly property int centerYOffset: -30
+
+                // 中间卡片
+                Rectangle {
+                    id: overlayPopup2Card
+                    width: Math.min(parent.width - 160, 520)
+                    radius: 16
+                    color: "#ffffff"
+                    border.color: "#e5e7eb"; border.width: 1
+
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: overlayPopup2.centerYOffset
+                }
+
+                // 内容布局
+                Column {
+                    id: overlayPopup2Content
+                    width: overlayPopup2Card.width - 48
+                    anchors.horizontalCenter: overlayPopup2Card.horizontalCenter
+                    anchors.verticalCenter: overlayPopup2Card.verticalCenter
+                    spacing: 14
+
+                    BusyIndicator {
+                        running: overlayBusy
+                        visible: overlayBusy
+                        width: 44; height: 44
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+
+                    Label {
+                        text: overlayText
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        font.pixelSize: 24
+                        color: '#3a7afe'     
+                        font.bold: true      // 加粗
+                    }
+
+                    Label {
+                        visible: !overlayBusy
+                        text: "请点击下方“确认”继续"
+                        horizontalAlignment: Text.AlignHCenter
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        font.pixelSize: 14
+                        color: textSub
+                    }
+
+                    Button {
+                        id: overlayPopup2OkBtn
+                        visible: !overlayBusy
+                        text: "确 认"
+                        width: 200
+                        height: 44
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        font.pixelSize: 18
+                        onClicked: overlayVisible = false
+
+                        contentItem: Text {
+                            text: overlayPopup2OkBtn.text
+                            font: overlayPopup2OkBtn.font
+                            color: "white"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            implicitWidth: 200
+                            implicitHeight: 44
+                            radius: 10
+                            border.color: "#2b5fd8"
+                            border.width: 1
+                            gradient: Gradient {
+                                GradientStop { position: 0.0; color: "#4c86ff" }
+                                GradientStop { position: 1.0; color: "#2f6ff5" }
+                            }
+                        }
+                    }
                 }
             }
-        }
-    }
-// ===== 开始检查弹层（覆盖全屏，卡片可上下微调）=====
-Rectangle {
-    id: overlayPopup2
-    anchors.fill: parent             // 一定要覆盖整个窗口
-    visible: overlayVisible          // 仍然用你的这三个变量
-    color: "#CC000000"
-    z: 10000                         // 保证最上层
-
-    // 点击背景关闭（忙碌时禁用）
-    MouseArea {
-        anchors.fill: parent
-        enabled: overlayVisible
-        onClicked: { if (!overlayBusy) overlayVisible = false }
-    }
-
-    // —— 想上下挪一点，就改这个偏移量（负数上移，正数下移）——
-    readonly property int centerYOffset: -30
-
-    // 中间卡片
-    Rectangle {
-        id: overlayPopup2Card
-        width: Math.min(parent.width - 160, 520)
-        radius: 16
-        color: "#ffffff"
-        border.color: "#e5e7eb"; border.width: 1
-
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: overlayPopup2.centerYOffset
-    }
-
-    // 内容布局
-    Column {
-        id: overlayPopup2Content
-        width: overlayPopup2Card.width - 48
-        anchors.horizontalCenter: overlayPopup2Card.horizontalCenter
-        anchors.verticalCenter: overlayPopup2Card.verticalCenter
-        spacing: 14
-
-        BusyIndicator {
-            running: overlayBusy
-            visible: overlayBusy
-            width: 44; height: 44
-            anchors.horizontalCenter: parent.horizontalCenter
-        }
-
-        Label {
-            text: overlayText
-            wrapMode: Text.WordWrap
-            horizontalAlignment: Text.AlignHCenter
-            anchors.horizontalCenter: parent.horizontalCenter
-            font.pixelSize: 24
-            color: '#3a7afe'     
-            font.bold: true      // 加粗
-        }
-
-        Label {
-            visible: !overlayBusy
-            text: "请点击下方“确认”继续"
-            horizontalAlignment: Text.AlignHCenter
-            anchors.horizontalCenter: parent.horizontalCenter
-            font.pixelSize: 14
-            color: textSub
-        }
-
-        Button {
-            id: overlayPopup2OkBtn
-            visible: !overlayBusy
-            text: "确 认"
-            width: 200
-            height: 44
-            anchors.horizontalCenter: parent.horizontalCenter
-            font.pixelSize: 18
-            onClicked: overlayVisible = false
-
-            contentItem: Text {
-                text: overlayPopup2OkBtn.text
-                font: overlayPopup2OkBtn.font
-                color: "white"
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-            background: Rectangle {
-                implicitWidth: 200
-                implicitHeight: 44
-                radius: 10
-                border.color: "#2b5fd8"
-                border.width: 1
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#4c86ff" }
-                    GradientStop { position: 1.0; color: "#2f6ff5" }
-                }
-            }
-        }
-    }
-}
 
 
 // ===== 样品信息弹窗（优化排版版） =====

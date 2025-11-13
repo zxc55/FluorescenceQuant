@@ -8,7 +8,29 @@
 #include <QSqlQuery>
 
 #include "IIODeviceController.h"
+class ScopedTimer {
+public:
+    explicit ScopedTimer(const QString& tag)
+        : m_tag(tag),
+          m_start(QDateTime::currentDateTime()) {
+        qDebug().noquote() << QString("【%1】开始: %2")
+                                  .arg(m_tag)
+                                  .arg(m_start.toString("yyyy-MM-dd HH:mm:ss.zzz"));
+    }
 
+    ~ScopedTimer() {
+        QDateTime end = QDateTime::currentDateTime();
+        qint64 ms = m_start.msecsTo(end);
+        qDebug().noquote() << QString("【%1】结束: %2（耗时 %3 ms）")
+                                  .arg(m_tag)
+                                  .arg(end.toString("yyyy-MM-dd HH:mm:ss.zzz"))
+                                  .arg(ms);
+    }
+
+private:
+    QString m_tag;
+    QDateTime m_start;
+};
 MainViewModel::MainViewModel(QObject* parent)
     : QObject(parent) {
     deviceController = new IIODeviceController(this);
@@ -24,6 +46,21 @@ MainViewModel::MainViewModel(QObject* parent)
 
     // 启动独立线程用于数据库写入
     std::thread(&MainViewModel::dbWriterLoop, this).detach();
+    // ⭐⭐ 新增：主线程用来查询曲线的数据库连接 ⭐⭐
+    initReaderDb();
+}
+void MainViewModel::initReaderDb() {
+    if (QSqlDatabase::contains(readerConnName_))
+        QSqlDatabase::removeDatabase(readerConnName_);
+
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", readerConnName_);
+    db.setDatabaseName("/mnt/SDCARD/app/db/app.db");
+
+    if (!db.open()) {
+        qWarning() << "❌ MainViewModel: reader DB open fail:" << db.lastError().text();
+    } else {
+        qInfo() << "📖 MainViewModel reader DB OK";
+    }
 }
 
 MainViewModel::~MainViewModel() {
@@ -118,4 +155,85 @@ void MainViewModel::dbWriterLoop() {
         // 防止CPU满载
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+}
+QVariantList MainViewModel::getAdcDataBySample(const QString& sampleNo) {
+    QVariantList result;
+
+    if (sampleNo.isEmpty()) {
+        qWarning() << "getAdcDataBySample: sampleNo empty!";
+        return result;
+    }
+
+    // ⭐ 使用 reader 连接 ⭐
+    QSqlDatabase db = QSqlDatabase::database(readerConnName_);
+    if (!db.isOpen()) {
+        qWarning() << "getAdcDataBySample: DB not open!";
+        return result;
+    }
+    QSqlQuery q(db);
+    {
+        ScopedTimer ti("ADC数据查询");
+
+        q.prepare("SELECT adcValues FROM adc_data WHERE sampleNo=? ORDER BY id ASC;");
+        q.addBindValue(sampleNo);
+        if (!q.exec()) {
+            qWarning() << "getAdcDataBySample SQL fail:" << q.lastError();
+            return result;
+        }
+    }
+
+    while (q.next()) {
+        QString json = q.value(0).toString();
+        QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+        if (!doc.isArray())
+            continue;
+
+        QJsonArray arr = doc.array();
+        for (auto v : arr) result.append(v.toDouble());
+    }
+
+    qDebug() << "📊 加载点数 = " << result.size();
+    return result;
+}
+
+// === QML 调用：根据 sampleNo 查询曲线数据 ===
+QVariantList MainViewModel::getAdcData(const QString& sampleNo) {
+    QVariantList result;
+
+    if (sampleNo.isEmpty()) {
+        qWarning() << "[MainViewModel] getAdcData: sampleNo empty";
+        return result;
+    }
+
+    QSqlDatabase db = QSqlDatabase::database(readerConnName_);
+    if (!db.isOpen()) {
+        qWarning() << "[MainViewModel] getAdcData: DB not open";
+        return result;
+    }
+
+    QSqlQuery q(db);
+    {
+        ScopedTimer ti("ADC数据查询");
+        q.prepare("SELECT adcValues FROM adc_data WHERE sampleNo=? ORDER BY id ASC");
+        q.addBindValue(sampleNo);
+        if (!q.exec()) {
+            qWarning() << "[MainViewModel] getAdcData SQL error:" << q.lastError().text();
+            return result;
+        }
+    }
+    {
+        ScopedTimer ti("ADC格式转换");
+        while (q.next()) {
+            QString json = q.value(0).toString();
+            QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+            if (!doc.isArray())
+                continue;
+
+            QJsonArray arr = doc.array();
+            for (auto v : arr) result.append(v.toDouble());
+        }
+    }
+
+    qInfo() << "[MainViewModel] 曲线点数=" << result.size();
+    return result;
 }

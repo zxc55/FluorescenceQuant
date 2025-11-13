@@ -23,8 +23,8 @@ public slots:
     void startReading();
     void stopReading();
     void setCurrentSample(const QString& sampleNo);
-    //  QVariantList getAdcDataBySample(const QString& no);
-
+    Q_INVOKABLE QVariantList getAdcDataBySample(const QString& sampleNo);
+    Q_INVOKABLE QVariantList getAdcData(const QString& sampleNo);
 signals:
     void newDataBatch(const QVector<double>& values);
 
@@ -34,7 +34,8 @@ private slots:
 
 private:
     IIODeviceController* deviceController{nullptr};
-
+    QString readerConnName_ = "reader";
+    void initReaderDb();
     QString currentSampleNo_;
     QVector<double> buffer_;
     QTimer flushTimer_;

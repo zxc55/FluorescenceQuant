@@ -11,6 +11,7 @@
 #include <QThread>
 #include <QVariantList>
 
+#include "APP/MyQmlComponents/MyLineSeries/MyLineSeries.h"
 // ====== 你的工程头文件 ======
 #include "CardWatcherStd.h"
 #include "HistoryViewModel.h"
@@ -76,6 +77,11 @@ int main(int argc, char* argv[]) {
     // ========== 注册 QML 类型 ==========
     qmlRegisterType<MotorController>("Motor", 1, 0, "MotorController");
     qmlRegisterType<ProjectsViewModel>("App", 1, 0, "ProjectsViewModel");
+    qmlRegisterType<MyLineSeries>(
+        "App",          // QML 模块名
+        1, 0,           // 版本号
+        "MyLineSeries"  // QML 中的类名
+    );
 
     QApplication app(argc, argv);
     QApplication::setOverrideCursor(Qt::BlankCursor);
@@ -149,7 +155,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("projectsVm", &projectsVm);
     engine.rootContext()->setContextProperty("historyVm", &historyVm);
     engine.rootContext()->setContextProperty("keys", &keysProxy);
-
+    engine.rootContext()->setContextProperty("mainSeries", vm.mainSeries());
     const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreated, &app,
