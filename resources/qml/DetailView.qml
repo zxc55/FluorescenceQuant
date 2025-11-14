@@ -1,96 +1,54 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtCharts 2.3
+import App 1.0   // CurveLoader 注册所在模块
 
 Item {
     id: root
     anchors.fill: parent
 
     property var record: ({})
-    signal goBack()
-
-    // ===== 批次绘制相关 =====
     property var adcList: []
-    property int batchIndex: 0
-    property int batchSize: 200
-
-    // ===== 自动缩放 Y 轴 =====
+    signal goBack()
+   // ===== 自动缩放 Y 轴 =====
     property real yMin: 0
     property real yMax: 1
+    // C++ 曲线加载器
+    CurveLoader { id: loader }
 
-    Component.onCompleted: Qt.callLater(tryLoad)
-    onRecordChanged: Qt.callLater(tryLoad)
+    // ========================= 组件加载 =========================
+    Component.onCompleted: {
+        Qt.callLater(tryLoad)
+    }
+    onRecordChanged: {
+        Qt.callLater(tryLoad)
+    }
 
-    // ===== 试图加载数据 =====
     function tryLoad() {
-        if (!record || !record.sampleNo) return
+        if (!record || !record.sampleNo)
+            return
         loadCurve()
     }
 
-    // ===== 批量加载曲线 =====
-    Timer {
-        id: addBatchPoints
-        interval: 100
-        repeat: true
-        onTriggered: {
-            var end = Math.min(batchIndex + batchSize, adcList.length)
-            for (var i=batchIndex; i<end; i++) {
-                curve.append(i, adcList[i])
-            }
-            batchIndex = end
-
-            if (batchIndex >= adcList.length) {
-                console.log("🎉 曲线绘制完成:", adcList.length)
-                stop()
-                drawMaxMinPoints()
-            }
-        }
-    }
-
-    // ===== 加载曲线数据 =====
+    // ========================= 加载曲线 =========================
     function loadCurve() {
-        adcList = mainViewModel.getAdcData(record.sampleNo)
-        console.log("📊 数据点数:", adcList.length)
-
-        curve.clear()
-        maxPoint.clear()
-        minPoint.clear()
-
-        if (adcList.length === 0) return
-
-        // 自动缩放 Y 轴
+         adcList = mainViewModel.getAdcData(record.sampleNo)
         yMin = Math.min.apply(null, adcList)
         yMax = Math.max.apply(null, adcList)
 
         axisY.min = yMin
         axisY.max = yMax
-
-        batchIndex = 0
-        addBatchPoints.start()
+        feeder.buildAndReplace(adcList)
+        root.visible = false
+        root.visible = true
+       // chart.update()
     }
 
-    // ===== 最大值 / 最小值 点 =====
-    function drawMaxMinPoints() {
-        if (adcList.length === 0) return
-
-        var maxVal = Math.max.apply(null, adcList)
-        var minVal = Math.min.apply(null, adcList)
-
-        var maxIndex = adcList.indexOf(maxVal)
-        var minIndex = adcList.indexOf(minVal)
-
-        maxPoint.append(maxIndex, maxVal)
-        minPoint.append(minIndex, minVal)
-
-        console.log("⭐ 最大值:", maxVal, "索引:", maxIndex)
-        console.log("⭐ 最小值:", minVal, "索引:", minIndex)
-    }
-
-    // ===== 顶部栏 =====
+    // ========================= 顶部栏 =========================
     Rectangle {
         height: 60
-        anchors.left: parent.left
-        anchors.right: parent.right
+        width: parent.width
+        anchors.top: parent.top
         color: "#f0f2f5"
 
         Row {
@@ -112,9 +70,11 @@ Item {
         }
     }
 
-    // ===== 曲线图 =====
+    // ========================= 曲线图区域 =========================
     ChartView {
         id: chart
+        objectName: "chartView"   // C++ 可用，不依赖 qt_chart
+
         anchors {
             top: parent.top
             topMargin: 60
@@ -123,10 +83,10 @@ Item {
             bottom: parent.bottom
         }
 
-        antialiasing: true
-        legend.visible: true
+     //   antialiasing: true
+      //  legend.visible: true
 
-        // ============= X 轴（自动）================
+        // X 轴
         ValueAxis {
             id: axisX
             min: 0
@@ -135,49 +95,71 @@ Item {
             titleText: "数据点"
         }
 
-        // ============= Y 轴（自动缩放）============
+        // Y 轴
         ValueAxis {
             id: axisY
-            min: yMin
+            min:  yMin
             max: yMax
             tickCount: 8
             titleText: "电压值"
         }
 
-        // ============= 主曲线 =====================
+        // QML 的曲线不绘制（占位，让坐标轴显示）
         LineSeries {
-            id: curve
-            name: "ADC 曲线"
-            color: "#3a7afe"
+            id: dummyCurve
+            name: "占位曲线"
             axisX: axisX
             axisY: axisY
+            color:  '#1a5995'
+            //fvisible: true
+        }
+        SeriesFeeder {
+            id: feeder
+            series: dummyCurve
+
+            //  onChunkDone: console.log("CHUNK", index, "SIZE", size, "ELAPSED_MS", elapsedMs)
+            // onFinished: {
+            //     //console.log("FEEDER_FINISHED");
+            //     root.loaded();
+            // }
+            //  onError: console.warn(message)
         }
 
-        // ============= 最大值点 ===================
-        ScatterSeries {
-            id: maxPoint
-            name: "最大值"
-            markerSize: 12
-            color: "red"
-            borderColor: "darkred"
-            axisX: axisX
-            axisY: axisY
-        }
+        // Component.onCompleted: {
+        //     var t0 = Date.now();
+        //     console.log("QML_COMPONENT_COMPLETED_MS:", t0);
+        //     if (CHUNK > 0) {
+        //         feeder.buildAndAppendChunked(N, CHUNK);
+        //     } else {
+        //       //  feeder.buildAndReplace(N);
+        //     }
+        // }
+        // 最大值点
+        // ScatterSeries {
+        //     id: maxPoint
+        //     name: "最大值"
+        //     markerSize: 10
+        //     color: "red"
+        //     borderColor: "darkred"
+        //     axisX: axisX
+        //     axisY: axisY
+        // }
 
-        // ============= 最小值点 ===================
-        ScatterSeries {
-            id: minPoint
-            name: "最小值"
-            markerSize: 12
-            color: "blue"
-            borderColor: "darkblue"
-            axisX: axisX
-            axisY: axisY
-        }
+        // // 最小值点
+        // ScatterSeries {
+        //     id: minPoint
+        //     name: "最小值"
+        //     markerSize: 10
+        //     color: "blue"
+        //     borderColor: "darkblue"
+        //     axisX: axisX
+        //     axisY: axisY
+        // }
 
-        // ============= 网格线 =====================
         backgroundColor: "#ffffff"
         plotAreaColor: "#ffffff"
-
     }
+
+
+    
 }

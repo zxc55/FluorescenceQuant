@@ -110,6 +110,9 @@ set(SOURCES
     APP/sqlite/VM/src/HistoryViewModel.cpp
     APP/sqlite/Repo/src/HistoryRepo.cpp
     APP/MyQmlComponents/MyLineSeries/MyLineSeries.cpp
+    APP/MyQmlComponents/MyCurveLoader/CurveLoader.cpp
+   # APP/MyQmlComponents/MyPlotView/PlotView.cpp
+    APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.cpp
 )
 
 set(HEADERS
@@ -139,6 +142,9 @@ set(HEADERS
     APP/sqlite/VM/inc/HistoryViewModel.h
     APP/sqlite/Repo/inc/HistoryRepo.h
     APP/MyQmlComponents/MyLineSeries/MyLineSeries.h
+    APP/MyQmlComponents/MyCurveLoader/CurveLoader.h
+   # APP/MyQmlComponents/MyPlotView/PlotView.h
+    APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h
     
 )
 add_executable(${PROJECT_NAME}

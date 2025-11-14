@@ -22,12 +22,14 @@
 #include "PrinterManager.h"
 
 // ====== SQLite / ViewModels / DB 线程 ======
+#include "APP/MyQmlComponents/MyCurveLoader/CurveLoader.h"
+#include "APP/MyQmlComponents/MyPlotView/PlotView.h"
+#include "APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h"
 #include "DBWorker.h"
 #include "DTO.h"
 #include "ProjectsViewModel.h"
 #include "SettingsViewModel.h"
 #include "UserViewModel.h"
-
 static bool ensureDir(const QString& path) {
     QDir d;
     return d.exists(path) ? true : d.mkpath(path);
@@ -77,12 +79,13 @@ int main(int argc, char* argv[]) {
     // ========== 注册 QML 类型 ==========
     qmlRegisterType<MotorController>("Motor", 1, 0, "MotorController");
     qmlRegisterType<ProjectsViewModel>("App", 1, 0, "ProjectsViewModel");
+    qmlRegisterType<SeriesFeeder>("App", 1, 0, "SeriesFeeder");
     qmlRegisterType<MyLineSeries>(
         "App",          // QML 模块名
         1, 0,           // 版本号
         "MyLineSeries"  // QML 中的类名
     );
-
+    qmlRegisterType<CurveLoader>("App", 1, 0, "CurveLoader");
     QApplication app(argc, argv);
     QApplication::setOverrideCursor(Qt::BlankCursor);
     qInfo() << "UI thread id =" << QThread::currentThread();
@@ -155,7 +158,6 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("projectsVm", &projectsVm);
     engine.rootContext()->setContextProperty("historyVm", &historyVm);
     engine.rootContext()->setContextProperty("keys", &keysProxy);
-
     const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreated, &app,
