@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("projectsVm", &projectsVm);
     engine.rootContext()->setContextProperty("historyVm", &historyVm);
     engine.rootContext()->setContextProperty("keys", &keysProxy);
-    engine.rootContext()->setContextProperty("mainSeries", vm.mainSeries());
+
     const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreated, &app,

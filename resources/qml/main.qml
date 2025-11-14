@@ -647,6 +647,7 @@ function startTest() {
                                     height: 100
                                     spacing: 40
                                     anchors.topMargin: 8
+                                    anchors.top: singleRowTable.bottom
 
                                     // === 标准曲线选择 ===
                                     Column {
@@ -1097,7 +1098,7 @@ function startTest() {
                                             if (historyPage.selectedIds.length === 1) {
                                                 let id = historyPage.selectedIds[0]
                                                 selectedHistoryItem = historyVm.getById(id)
-                                                currentPage = 3  // 跳到详细信息页
+                                                currentPage = 4  // 跳到详细信息页////
                                             } else {
                                                 console.log("⚠️ 请选择一条记录查看详细信息")
                                             }
@@ -1266,31 +1267,31 @@ function startTest() {
                     }
                  }
             }///
-                Item {
-                            id: detailPage
-                            anchors {
-                                left: rightPane.left
-                                right: rightPane.right
-                                top: rightPane.top
-                                bottom: rightPane.bottom
-                            }
-                            visible: currentPage === 3
-                            z: 999
+                    Item {
+                                id: detailPage
+                                anchors {
+                                    left: rightPane.left
+                                    right: rightPane.right
+                                    top: rightPane.top
+                                    bottom: rightPane.bottom
+                                }
+                                visible: currentPage === 4////
+                                z: 999
 
-                            Loader {
-                                id: detailLoader
-                                anchors.fill: parent
-                                source: "qrc:/qml/DetailView.qml"
-                                active: currentPage === 3
+                                Loader {
+                                    id: detailLoader
+                                    anchors.fill: parent
+                                    source: "qrc:/qml/DetailView.qml"
+                                    active: currentPage === 4////
 
-                                onLoaded: {
-                                    item.record = selectedHistoryItem
-                                    item.goBack.connect(() => currentPage = 2)
+                                    onLoaded: {
+                                        item.record = selectedHistoryItem
+                                        item.goBack.connect(() => currentPage = 2)
+                                    }
                                 }
                             }
                         }
                     }
-                }
             // ===== 开始检查弹层（覆盖全屏，卡片可上下微调）=====
             Rectangle {
                 id: overlayPopup2

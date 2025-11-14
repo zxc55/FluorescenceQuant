@@ -12,7 +12,7 @@ Item {
     // ===== 批次绘制相关 =====
     property var adcList: []
     property int batchIndex: 0
-    property int batchSize: 100
+    property int batchSize: 200
 
     // ===== 自动缩放 Y 轴 =====
     property real yMin: 0
@@ -30,7 +30,7 @@ Item {
     // ===== 批量加载曲线 =====
     Timer {
         id: addBatchPoints
-        interval: 1
+        interval: 100
         repeat: true
         onTriggered: {
             var end = Math.min(batchIndex + batchSize, adcList.length)
