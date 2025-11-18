@@ -32,7 +32,7 @@ Item {
 
     // ========================= 加载曲线 =========================
     function loadCurve() {
-         adcList = mainViewModel.getAdcData(record.sampleNo)
+        adcList = mainViewModel.getAdcData(record.sampleNo)
         yMin = Math.min.apply(null, adcList)
         yMax = Math.max.apply(null, adcList)
 

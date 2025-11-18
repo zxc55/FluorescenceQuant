@@ -11,9 +11,12 @@ ProjectsViewModel::ProjectsViewModel(QObject* parent)
 
 // === 打开数据库 ===
 bool ProjectsViewModel::openDatabase() {
-    // ✅ 数据库存放路径（SD 卡）
+// ✅ 数据库存放路径（SD 卡）
+#ifndef LOCAL_BUILD
     const QString dbPath = "/mnt/SDCARD/app/db/app.db";
-
+#else
+    const QString dbPath = "/home/pribolab/Project/FluorescenceQuant/debugDir/app.db";
+#endif
     // 连接名固定，防止重复连接
     if (QSqlDatabase::contains("app_connection"))
         m_db = QSqlDatabase::database("app_connection");

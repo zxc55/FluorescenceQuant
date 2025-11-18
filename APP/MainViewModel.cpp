@@ -6,6 +6,10 @@
 #include <QJsonDocument>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <algorithm>  // std::sort
+#include <chrono>
+#include <cmath>  // std::abs
+#include <thread>
 
 #include "IIODeviceController.h"
 class ScopedTimer {
@@ -54,8 +58,11 @@ void MainViewModel::initReaderDb() {
         QSqlDatabase::removeDatabase(readerConnName_);
 
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", readerConnName_);
+#ifndef LOCAL_BUILD
     db.setDatabaseName("/mnt/SDCARD/app/db/app.db");
-
+#else
+    db.setDatabaseName("/home/pribolab/Project/FluorescenceQuant/debugDir/app.db");
+#endif
     if (!db.open()) {
         qWarning() << "❌ MainViewModel: reader DB open fail:" << db.lastError().text();
     } else {
@@ -108,7 +115,11 @@ void MainViewModel::flushBufferToDb() {
 void MainViewModel::dbWriterLoop() {
     // 每个线程必须单独打开自己的数据库连接
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "writer");
+#ifndef LOCAL_BUILD
     db.setDatabaseName("/mnt/SDCARD/app/db/app.db");
+#else
+    db.setDatabaseName("/home/pribolab/Project/FluorescenceQuant/debugDir/app.db");
+#endif
     if (!db.open()) {
         qWarning() << "❌ 数据库线程打开失败:" << db.lastError().text();
         return;
@@ -236,4 +247,159 @@ QVariantList MainViewModel::getAdcData(const QString& sampleNo) {
 
     qInfo() << "[MainViewModel] 曲线点数=" << result.size();
     return result;
+}
+QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
+    QVariantMap r;
+
+    r["hasT"] = false;
+    r["hasC"] = false;
+    r["areaT"] = 0.0;
+    r["areaC"] = 0.0;
+    r["ratioTC"] = 0.0;
+    r["valid"] = false;
+
+    const int n = adcList.size();
+    if (n < 200)
+        return r;
+
+    // ===== 1. 转成 double =====
+    QVector<double> y(n);
+    for (int i = 0; i < n; ++i)
+        y[i] = adcList[i].toDouble();
+
+    // ===== 2. 基线（局部最小值滤波）=====
+    const int win = 20;
+    QVector<double> baseline(n);
+
+    for (int i = 0; i < n; ++i) {
+        int L = qMax(0, i - win);
+        int R = qMin(n - 1, i + win);
+        double mn = y[L];
+        for (int j = L; j <= R; ++j)
+            mn = qMin(mn, y[j]);
+        baseline[i] = mn;
+    }
+
+    // ===== 3. 去基线 corr =====
+    QVector<double> corr(n);
+    double maxCorr = 0;
+
+    for (int i = 0; i < n; ++i) {
+        double v = y[i] - baseline[i];
+        if (v < 0)
+            v = 0;
+        corr[i] = v;
+        if (v > maxCorr)
+            maxCorr = v;
+    }
+
+    if (maxCorr < 1e-6)
+        return r;
+
+    // ===== 4. 自动找峰（局部最大）=====
+    struct Peak {
+        int idx;
+        double h;
+    };
+    QVector<Peak> peaks;
+
+    double thresh = maxCorr * 0.20;  // 过滤很小的噪声峰
+
+    for (int i = 1; i < n - 1; ++i) {
+        if (corr[i] > thresh &&
+            corr[i] >= corr[i - 1] &&
+            corr[i] >= corr[i + 1]) {
+            peaks.append({i, corr[i]});
+        }
+    }
+
+    if (peaks.isEmpty())
+        return r;
+
+    // 排序（高度从大到小）
+    std::sort(peaks.begin(), peaks.end(),
+              [](const Peak& a, const Peak& b) { return a.h > b.h; });
+
+    // ===== 5. 至少间隔 50 点，取 2 个峰 =====
+    QVector<Peak> sel;
+    const int minDist = 50;
+
+    for (auto& p : peaks) {
+        bool ok = true;
+        for (auto& s : sel) {
+            if (qAbs(p.idx - s.idx) < minDist)
+                ok = false;
+        }
+        if (ok)
+            sel.append(p);
+        if (sel.size() >= 2)
+            break;
+    }
+
+    // 按位置排序（左=T，右=C）
+    std::sort(sel.begin(), sel.end(),
+              [](const Peak& a, const Peak& b) { return a.idx < b.idx; });
+
+    // ===== 6. 峰面积（10%高度阈值，全峰积分）=====
+    auto integratePeak = [&](int center) -> double {
+        double h10 = corr[center] * 0.10;  // 10% 阈值
+
+        int L = center;
+        while (L > 0 && corr[L] > h10)
+            L--;
+
+        int R = center;
+        while (R < n - 1 && corr[R] > h10)
+            R++;
+
+        double area = 0.0;
+        for (int i = L + 1; i <= R; ++i)
+            area += 0.5 * (corr[i] + corr[i - 1]);
+
+        return area;
+    };
+
+    double areaT = 0, areaC = 0;
+    bool hasT = false, hasC = false;
+
+    // ===== 7. 单峰 or 双峰 =====
+    if (sel.size() == 1) {
+        int idx = sel[0].idx;
+        if (idx > n * 0.45) {  // 靠右 → C 线
+            hasC = true;
+            areaC = integratePeak(idx);
+        } else {
+            hasT = true;
+            areaT = integratePeak(idx);
+        }
+    } else if (sel.size() >= 2) {
+        hasT = true;
+        hasC = true;
+        areaT = integratePeak(sel[0].idx);  // 左峰 → T
+        areaC = integratePeak(sel[1].idx);  // 右峰 → C
+    }
+
+    // ===== 8. C 线不存在 → 无效卡 =====
+    if (!hasC) {
+        r["valid"] = false;
+        return r;
+    }
+    r["valid"] = true;
+
+    // ===== 9. 只有 C → 阴性卡 =====
+    if (hasC && !hasT) {
+        r["hasC"] = true;
+        r["areaC"] = areaC;
+        r["ratioTC"] = 0;
+        return r;
+    }
+
+    // ===== 10. T+C 正常卡 =====
+    r["hasT"] = hasT;
+    r["hasC"] = hasC;
+    r["areaT"] = areaT;
+    r["areaC"] = areaC;
+    r["ratioTC"] = (areaC > 0 ? areaT / areaC : 0.0);
+
+    return r;
 }

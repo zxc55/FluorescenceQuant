@@ -70,13 +70,60 @@ INSERT INTO project_info (
     return true;
 }
 
+// bool HistoryRepo::deleteById(QSqlDatabase db, int id) {
+//     QSqlQuery q(db);
+//     q.prepare("DELETE FROM project_info WHERE id = ?");
+//     q.addBindValue(id);
+//     if (!q.exec()) {
+//         qWarning() << "HistoryRepo::deleteById failed:" << q.lastError().text();
+//         return false;
+//     }
+//     return true;
+// }
 bool HistoryRepo::deleteById(QSqlDatabase db, int id) {
-    QSqlQuery q(db);
-    q.prepare("DELETE FROM project_info WHERE id = ?");
-    q.addBindValue(id);
-    if (!q.exec()) {
-        qWarning() << "HistoryRepo::deleteById failed:" << q.lastError().text();
-        return false;
+    QString sampleNo;
+
+    // 1️⃣ 查询 project_info 获取 sampleNo
+    {
+        QSqlQuery q(db);
+        q.prepare("SELECT sampleNo FROM project_info WHERE id = ?");
+        q.addBindValue(id);
+
+        if (!q.exec() || !q.next()) {
+            qWarning() << "❌ deleteById: 找不到 id =" << id;
+            return false;
+        }
+
+        sampleNo = q.value(0).toString();
     }
+
+    // 2️⃣ 删除 project_info 表中该记录
+    {
+        QSqlQuery q(db);
+        q.prepare("DELETE FROM project_info WHERE id = ?");
+        q.addBindValue(id);
+
+        if (!q.exec()) {
+            qWarning() << "❌ 删除 project_info 失败:" << q.lastError().text();
+            return false;
+        }
+    }
+
+    // 3️⃣ 删除 adc_data 中对应 sampleNo 的所有数据
+    {
+        QSqlQuery q(db);
+        q.prepare("DELETE FROM adc_data WHERE sampleNo = ?");
+        q.addBindValue(sampleNo);
+
+        if (!q.exec()) {
+            qWarning() << "❌ 删除 adc_data 失败:" << q.lastError().text();
+            return false;
+        }
+    }
+
+    qInfo() << "🗑 删除成功 → id =" << id
+            << ", sampleNo =" << sampleNo
+            << "（project_info + adc_data 已全部清理）";
+
     return true;
 }

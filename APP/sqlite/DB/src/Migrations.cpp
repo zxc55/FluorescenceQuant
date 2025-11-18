@@ -5,6 +5,7 @@
 #include <QSqlQuery>
 #include <QVariant>
 
+// 执行 SQL 并打印错误
 static bool execOne(QSqlQuery& q, const QString& sql) {
     if (!q.exec(sql)) {
         qWarning() << "[MIGRATE] SQL fail:" << q.lastError().text();
@@ -14,16 +15,83 @@ static bool execOne(QSqlQuery& q, const QString& sql) {
     return true;
 }
 
-static bool columnExists(QSqlDatabase db, const QString& table, const QString& column) {
+// =========================
+//  project_info 结构修复
+// =========================
+static bool migrateProjectInfo(QSqlDatabase& db) {
     QSqlQuery q(db);
-    q.exec(QStringLiteral("PRAGMA table_info(%1);").arg(table));
+
+    // 检查 batchCode 的 DEFAULT 是否存在
+    q.exec("PRAGMA table_info(project_info)");
+    bool need = false;
+
     while (q.next()) {
-        if (q.value(1).toString().compare(column, Qt::CaseInsensitive) == 0)
-            return true;
+        QString col = q.value(1).toString();
+        QString dflt = q.value(4).toString();
+
+        if (col == "batchCode") {
+            // 如果默认值不是空字符串 → 旧版本，需要迁移
+            if (dflt != "''" && dflt != "") {
+                need = true;
+            }
+        }
     }
-    return false;
+
+    if (!need) {
+        qInfo() << "[MIGRATE] project_info 表结构正常，不需要迁移";
+        return true;
+    }
+
+    qWarning() << "⚠️ project_info 表结构为旧版 → 开始迁移修复";
+
+    // 1. 旧表改名
+    execOne(q, "ALTER TABLE project_info RENAME TO project_info_old;");
+
+    // 2. 新建 project_info（最终新版结构）
+    execOne(q, R"SQL(
+CREATE TABLE project_info(
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    projectId       INTEGER NOT NULL,
+    sampleNo        TEXT NOT NULL DEFAULT '',
+    sampleSource    TEXT NOT NULL DEFAULT '',
+    sampleName      TEXT NOT NULL DEFAULT '',
+    standardCurve   TEXT NOT NULL DEFAULT '',
+    batchCode       TEXT NOT NULL DEFAULT '',
+    detectedConc    REAL NOT NULL DEFAULT 0.0,
+    referenceValue  REAL NOT NULL DEFAULT 0.0,
+    result          TEXT NOT NULL DEFAULT '',
+    detectedTime    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    detectedUnit    TEXT NOT NULL DEFAULT 'μg/kg',
+    detectedPerson  TEXT NOT NULL DEFAULT '',
+    dilutionInfo    TEXT NOT NULL DEFAULT '1倍',
+    FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+);
+)SQL");
+
+    // 3. 迁移旧表的数据
+    execOne(q, R"SQL(
+INSERT INTO project_info(
+    id, projectId, sampleNo, sampleSource, sampleName, standardCurve,
+    batchCode, detectedConc, referenceValue, result, detectedTime,
+    detectedUnit, detectedPerson, dilutionInfo
+)
+SELECT
+    id, projectId, sampleNo, sampleSource, sampleName, standardCurve,
+    batchCode, detectedConc, referenceValue, result, detectedTime,
+    detectedUnit, detectedPerson, dilutionInfo
+FROM project_info_old;
+)SQL");
+
+    // 4. 删除旧表
+    execOne(q, "DROP TABLE project_info_old;");
+
+    qInfo() << "✅ project_info 表结构迁移完成";
+    return true;
 }
 
+// =========================
+//  主迁移入口（完整初始化）
+// =========================
 bool migrateAllToV1(QSqlDatabase db) {
     if (!db.isOpen()) {
         qWarning() << "[MIGRATE] db not open";
@@ -32,7 +100,7 @@ bool migrateAllToV1(QSqlDatabase db) {
 
     QSqlQuery q(db);
 
-    // === app_settings ===
+    // ===== app_settings =====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS app_settings(
     id                  INTEGER PRIMARY KEY CHECK(id=1),
@@ -49,7 +117,7 @@ INSERT OR IGNORE INTO app_settings(id, manufacturer_name)
 VALUES(1, '');
 )SQL");
 
-    // === users ===
+    // ===== users =====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS users(
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +136,7 @@ VALUES ('admin','123456','salt','admin','内置管理员'),
        ('op','111111','salt','operator','内置操作员');
 )SQL");
 
-    // === projects ===
+    // ===== projects =====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS projects(
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,7 +164,7 @@ SELECT '玉米赤霉烯酮','B2025-003',datetime('now','localtime')
 WHERE (SELECT COUNT(1) FROM projects)=2;
 )SQL");
 
-    // === project_info（新版驼峰字段）===
+    // ===== project_info（旧表不会被更新，因此需要额外迁移）=====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS project_info(
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,7 +185,10 @@ CREATE TABLE IF NOT EXISTS project_info(
 );
 )SQL");
 
-    // ===adc_data 表，用于保存 ADS1115 实时采样结果 ===
+    // ★★★★★ 必须执行（修复旧表结构）
+    migrateProjectInfo(db);
+
+    // ===== adc_data =====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS adc_data(
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

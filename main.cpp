@@ -51,6 +51,7 @@ static void setupQtDpiAndPlatform() {
 
 int main(int argc, char* argv[]) {
     setupQtDpiAndPlatform();
+#ifndef LOCAL_BUILD
 
     // —— 输入法/触摸相关 —— //
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
@@ -61,6 +62,7 @@ int main(int argc, char* argv[]) {
 
     // —— Qt 插件路径（确保能找到 libqsqlite.so）—— //
     qputenv("QT_PLUGIN_PATH", QByteArray("/usr/lib/arm-qt/plugins"));
+#endif
 
     // ========== 注册跨线程信号/类型 ==========
     qRegisterMetaType<AppSettingsRow>("AppSettingsRow");
@@ -89,9 +91,12 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QApplication::setOverrideCursor(Qt::BlankCursor);
     qInfo() << "UI thread id =" << QThread::currentThread();
-
+#ifndef LOCAL_BUILD
     // ================= 路径 =================
     const QString dbDir = "/mnt/SDCARD/app/db";
+#else
+    const QString dbDir = "/home/pribolab/Project/FluorescenceQuant/debugDir";
+#endif
     const QString dbPath = dbDir + "/app.db";
     ensureDir(dbDir);
 

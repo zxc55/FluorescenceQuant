@@ -12,7 +12,7 @@
 using namespace QtCharts;
 
 CurveLoader::CurveLoader(QObject* parent)
-    : QObject(parent) {
+    : QObject(nullptr) {
     initDb();
 }
 
@@ -22,8 +22,11 @@ void CurveLoader::initDb() {
         QSqlDatabase::removeDatabase(connName_);
 
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connName_);
+#ifndef LOCAL_BUILD
     db.setDatabaseName("/mnt/SDCARD/app/db/app.db");
-
+#else
+    db.setDatabaseName("/home/pribolab/Project/FluorescenceQuant/debugDir/app.db");
+#endif
     if (!db.open()) {
         qWarning() << "❌ CurveLoader: 打开数据库失败:" << db.lastError().text();
     } else {

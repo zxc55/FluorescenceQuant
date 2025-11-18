@@ -167,6 +167,7 @@ if(${TARGET_BOARD} STREQUAL "全志T113-S3")
     set_target_properties(printer PROPERTIES IMPORTED_LOCATION
         "${CMAKE_CURRENT_SOURCE_DIR}/libprinter_1.0.3.so"
     )   
+    
 target_link_libraries(FluorescenceQuant PRIVATE
     printer
     ${CMAKE_SOURCE_DIR}/APP/libmodbus/lib/libmodbus.so

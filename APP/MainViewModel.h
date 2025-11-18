@@ -18,7 +18,7 @@ class MainViewModel : public QObject {
 public:
     explicit MainViewModel(QObject* parent = nullptr);
     ~MainViewModel();
-
+    Q_INVOKABLE QVariantMap calcTC(const QVariantList& adcList);
 public slots:
     void startReading();
     void stopReading();

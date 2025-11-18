@@ -34,7 +34,7 @@ void PrinterManager::stop() {
     qDebug() << "Printer thread stopped.";
 }
 bool PrinterManager::initPrinter() {
-    // #ifdef DLOCAL_BUILD
+#ifndef LOCAL_BUILD
 
     printer = new_printer();
     int err = printer->device()
@@ -48,7 +48,7 @@ bool PrinterManager::initPrinter() {
     }
 
     qDebug() << "Printer init success";
-    // #endif
+#endif
     return true;
 }
 PrinterManager& PrinterManager::instance() {

@@ -215,7 +215,7 @@ bool DBWorker::openDatabaseInThisThread() {
         dir.mkpath(".");
     connName_ = QStringLiteral("conn_%1").arg(reinterpret_cast<qulonglong>(QThread::currentThreadId()));
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connName_);
-    db.setDatabaseName(dbPath_);
+    db.setDatabaseName(dbPath_);  // 打开这个文件作为数据库，如果没有就新建
     if (!db.open()) {
         qWarning() << "[DB] open fail:" << db.lastError().text();
         return false;

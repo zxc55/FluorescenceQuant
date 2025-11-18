@@ -11,6 +11,7 @@ ModbusWorkerThread::~ModbusWorkerThread() {
 }
 
 bool ModbusWorkerThread::connectModbus() {
+#ifndef LOCAL_BUILD
     ctx = modbus_new_rtu(devPath.c_str(), baudrate, 'N', 8, 1);
     if (!ctx) {
         std::cerr << "❌ 无法创建 Modbus RTU 连接" << std::endl;
@@ -29,25 +30,31 @@ bool ModbusWorkerThread::connectModbus() {
         return false;
     }
     std::cout << "✅ Modbus 连接成功: " << devPath << " 波特率 " << baudrate << std::endl;
+#endif
     return true;
 }
 
 void ModbusWorkerThread::closeModbus() {
+#ifndef LOCAL_BUILD
     if (ctx) {
         modbus_close(ctx);
         modbus_free(ctx);
         ctx = nullptr;
     }
+#endif
 }
 
 void ModbusWorkerThread::start() {
+#ifndef LOCAL_BUILD
     if (running.load())
         return;
     running.store(true);
     worker = std::thread(&ModbusWorkerThread::threadFunc, this);
+#endif
 }
 
 void ModbusWorkerThread::stop() {
+#ifndef LOCAL_BUILD
     if (!running.load())
         return;
     enqueue({MotorCmdType::Exit});
@@ -56,15 +63,19 @@ void ModbusWorkerThread::stop() {
     if (worker.joinable())
         worker.join();
     closeModbus();
+#endif
 }
 
 void ModbusWorkerThread::enqueue(const MotorCommand& cmd) {
+#ifndef LOCAL_BUILD
     std::lock_guard<std::mutex> lock(mtx);
     cmdQueue.push(cmd);
     cv.notify_one();  // 唤醒当前在 cv 上等待（cv.wait(...)）的一个线程
+#endif
 }
 
 void ModbusWorkerThread::threadFunc() {
+#ifndef LOCAL_BUILD
     if (!connectModbus())
         return;
     std::cout << "🧵 Modbus worker thread started." << std::endl;
@@ -87,9 +98,11 @@ void ModbusWorkerThread::threadFunc() {
 
     std::cout << "🧵 Modbus worker thread stopped." << std::endl;
     closeModbus();
+#endif
 }
 
 void ModbusWorkerThread::handleCommand(const MotorCommand& cmd) {
+#ifndef LOCAL_BUILD
     bool ok = false;
 
     switch (cmd.type) {
@@ -158,9 +171,11 @@ void ModbusWorkerThread::handleCommand(const MotorCommand& cmd) {
     if (!ok) {
         std::cerr << "❌ Modbus 命令执行失败: " << modbus_strerror(errno) << std::endl;
     }
+#endif
 }
 
 int ModbusWorkerThread::readRegister(int addr) {
+#ifndef LOCAL_BUILD
     if (!ctx) {
         std::cerr << "❌ Modbus 未连接，无法读取寄存器" << std::endl;
         return -1;
@@ -179,4 +194,7 @@ int ModbusWorkerThread::readRegister(int addr) {
     std::cout << "📖 输入寄存器 0x" << std::hex << addr
               << " 值=" << std::dec << val << std::endl;
     return static_cast<int>(val);
+#else
+    return 0;
+#endif
 }
