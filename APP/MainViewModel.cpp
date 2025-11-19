@@ -267,81 +267,162 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
     QVariantMap r;
 
     int n = adcList.size();
-    if (n < 1500) {
-        qWarning() << "[calcTC] curve too short";
+    if (n < 1500) {  // 数据太短：不可能出现 C/T 峰
+        qWarning() << "[calcTC] curve too short, n=" << n;
         return r;
     }
 
+    // -------------------------
+    // 1) 转数组
+    // -------------------------
     QVector<double> y(n);
     for (int i = 0; i < n; ++i)
         y[i] = adcList[i].toDouble();
 
-    // 1) 找 C 峰（从 666 后）
+    // ============================================================
+    // 2) 找 C 峰：从 index >= 666 区间找最大值
+    // ============================================================
     int idxC = -1;
     double maxC = -1;
-    for (int i = 666; i < n; ++i)
+
+    for (int i = 666; i < n; ++i) {
         if (y[i] > maxC) {
             maxC = y[i];
             idxC = i;
         }
+    }
 
-    // 2) 找 T 峰（从 1250 后）
+    if (idxC < 0) {
+        qWarning() << "[calcTC] ERROR: cannot find C peak!";
+        return r;
+    }
+
+    // ============================================================
+    // 3) 找 T 峰：从 index >= 1250 区间找最大值
+    // ============================================================
     int idxT = -1;
     double maxT = -1;
-    for (int i = 1250; i < n; ++i)
+
+    for (int i = 1250; i < n; ++i) {
         if (y[i] > maxT) {
             maxT = y[i];
             idxT = i;
         }
+    }
 
-    if (idxC < 0 || idxT < 0) {
-        qWarning() << "[calcTC] peak not found";
+    if (idxT < 0) {
+        qWarning() << "[calcTC] ERROR: cannot find T peak!";
         return r;
     }
 
-    // 3) 峰值（左右 PEAK_NEIGHBOR_COUNT 个点）
+    // ============================================================
+    // 4) 峰值计算：7 点平均
+    // ============================================================
     double C_raw = avgPeak(y, idxC);
     double T_raw = avgPeak(y, idxT);
 
-    // 4) 本底 = 两峰之间最小值
-    int a = qMin(idxC, idxT);
-    int b = qMax(idxC, idxT);
-    double baseline = y[a];
-    for (int i = a; i <= b; i++)
-        if (y[i] < baseline)
-            baseline = y[i];
+    // ============================================================
+    // 5) 初步 baseline 用于判断 T 是否存在
+    //    baseline_est = C~T 区间最小值
+    // ============================================================
+    int a0 = qMin(idxC, idxT);
+    int b0 = qMax(idxC, idxT);
 
-    // 5) 扣本底
+    double baseline_est = y[a0];
+    for (int i = a0; i <= b0; ++i)
+        if (y[i] < baseline_est)
+            baseline_est = y[i];
+
+    // 初步判断 T 是否存在
+    double T_net_est = T_raw - baseline_est;
+
+    bool hasT = true;
+    bool hasC = true;
+
+    const double T_THRESHOLD = 0.01;  // 阴性判定阈值（你机器噪声 < 0.01）
+
+    if (T_net_est < T_THRESHOLD)
+        hasT = false;  // 阴性卡！
+
+    // ============================================================
+    // 6) 最终 baseline
+    // ============================================================
+
+    double baseline = 0;
+
+    if (hasT) {
+        // -----------------------
+        // 阳性卡：用 C~T 区间最小值
+        // -----------------------
+        baseline = y[a0];
+        for (int i = a0; i <= b0; ++i)
+            if (y[i] < baseline)
+                baseline = y[i];
+    } else {
+        // -----------------------
+        // 阴性卡：只用背景区 baseline（更稳定）
+        // 因为 T 不存在，无需 C~T baseline
+        // -----------------------
+        int L = 800, R = 950;
+        if (L < 0)
+            L = 0;
+        if (R >= n)
+            R = n - 1;
+
+        baseline = y[L];
+        for (int i = L; i <= R; ++i)
+            if (y[i] < baseline)
+                baseline = y[i];
+    }
+
+    // ============================================================
+    // 7) 最终净峰值
+    // ============================================================
     double C_net = C_raw - baseline;
-    double T_net = T_raw - baseline;
+    double T_net = hasT ? (T_raw - baseline) : 0;  // 阴性卡 T_net=0
+
     if (C_net < 0)
         C_net = 0;
     if (T_net < 0)
         T_net = 0;
 
-    // 6) 比值
-    double ratio = (C_net > 0) ? (T_net / C_net) : 0;
+    // ============================================================
+    // 8) T/C 比值
+    // ============================================================
+    double ratio = 0;
+    if (hasT && C_net > 0)
+        ratio = T_net / C_net;
+    else
+        ratio = 0;  // 阴性卡 T/C=0
 
-    // 7) 输出
+    // ============================================================
+    // 9) 输出结果
+    // ============================================================
     r["idxC"] = idxC;
     r["idxT"] = idxT;
+
+    r["hasC"] = hasC;
+    r["hasT"] = hasT;
+
+    r["baseline"] = baseline;
     r["C_raw"] = C_raw;
     r["T_raw"] = T_raw;
-    r["baseline"] = baseline;
+
     r["C_net"] = C_net;
     r["T_net"] = T_net;
     r["ratioTC"] = ratio;
 
-    qInfo()
-        << "[calcTC]"
-        << "idxC=" << idxC
-        << "idxT=" << idxT
-        << "C_raw=" << C_raw
-        << "T_raw=" << T_raw
-        << "baseline=" << baseline
-        << "C_net=" << C_net
-        << "T_net=" << T_net
-        << "ratio=" << ratio;
+    // debug 输出
+    qInfo() << "[calcTC]"
+            << "idxC=" << idxC
+            << "idxT=" << idxT
+            << "hasT=" << hasT
+            << "baseline=" << baseline
+            << "C_raw=" << C_raw
+            << "T_raw=" << T_raw
+            << "C_net=" << C_net
+            << "T_net=" << T_net
+            << "ratio=" << ratio;
 
     return r;
 }
