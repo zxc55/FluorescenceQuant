@@ -3,8 +3,8 @@ import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 
-// import QtQuick.VirtualKeyboard 2.0
-// import QtQuick.VirtualKeyboard.Settings 2.0
+import QtQuick.VirtualKeyboard 2.0
+import QtQuick.VirtualKeyboard.Settings 2.0
 import App 1.0
 import Motor 1.0
 ApplicationWindow {
@@ -50,23 +50,51 @@ ApplicationWindow {
     property var originCheckTimer: Timer // 定时器对象引用
     // ==== 初始化 ====
     Component.onCompleted: {
-    //    VirtualKeyboardSettings.activeLocales = ["en_US", "zh_CN"]
-    //    VirtualKeyboardSettings.locale = "zh_CN"
-        console.log("projectsVm.count (onCompleted) =", (typeof projectsVm !== "undefined") ? projectsVm.count : "N/A")
-        motor.start()
-        motor.back();
-    }
+        VirtualKeyboardSettings.activeLocales = ["en_US", "zh_CN"]
+        VirtualKeyboardSettings.locale = "zh_CN"
 
-    // // 键盘面板
-    // InputPanel {
-    //     id: panel
-    //     z: 9999
-    //     anchors.left: parent.left
-    //     anchors.right: parent.right
-    //     anchors.bottom: parent.bottom
-    //     visible: Qt.inputMethod.visible
-    //     parent: win
-    // }
+        motor.start()
+        motor.back()
+
+        console.log("【初始化】开始回原点…")
+        zeroHomeTimer.start()
+    }
+Timer {
+    id: zeroHomeTimer
+    interval: 300
+    repeat: true
+    running: false
+
+    onTriggered: {
+        var val = motor.readRegister(0x34)
+        console.log("🔍 原点状态 0x34 =", val)
+
+        if (val === 1) {
+            zeroHomeTimer.stop()
+            console.log("🎉 回原点成功 → 2 秒后执行 motor.runPosition")
+
+            var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false }', win)
+            t.triggered.connect(function() {
+                console.log("🚀 开始运行 motor.runPosition")
+                motor.runPosition(1, 0, 150, 45000)
+                t.destroy()  // 清理 Timer
+            })
+            t.start()   // ★★ 必须启动
+        }
+    }
+}
+
+
+    // 键盘面板
+    InputPanel {
+        id: panel
+        z: 9999
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        visible: Qt.inputMethod.visible
+        parent: win
+    }
 
     // 顶部栏
     Rectangle {
@@ -149,7 +177,7 @@ function startTest() {
         console.log("🧪[" + nowStr() + "] 启动连续采集")
 
         // === 启动电机运行 ===
-        motor.runPosition(1, 0, 100, 45000)
+        motor.runPosition(1, 0, 150, 45000)
         console.log("🚀[" + nowStr() + "] 电机开始运行")
 
         // === 检测电机状态直到停止 ===
@@ -167,18 +195,20 @@ function startTest() {
                 console.log("⏹[" + nowStr() + "] 停止采集")
 
                 // === 回原点 ===
-                motor.back()
-                console.log("🔙[" + nowStr() + "] 回原点")
+                // motor.back()
+                // console.log("🔙[" + nowStr() + "] 回原点")
                 uvadcList = mainViewModel.getAdcData(tfSampleId.text)
                 var res = mainViewModel.calcTC(uvadcList)          // 调用 C++ 函数
 
-                console.log("hasT =", res.hasT,          // 是否有 T 线
-                "areaT =", res.areaT,        // T 线面积
-                "hasC =", res.hasC,          // 是否有 C 线
-                "areaC =", res.areaC,        // C 线面积
-                "ratioTC =", res.ratioTC)    // T/C 比值
+                // console.log("hasT =", res.hasT,          // 是否有 T 线
+                // "areaT =", res.areaT,        // T 线面积
+                // "hasC =", res.hasC,          // 是否有 C 线
+                // "areaC =", res.areaC,        // C 线面积
+                // "ratioTC =", res.ratioTC)    // T/C 比值
                 // === 读取界面输入信息 ===
                 var sampleNo = tfSampleId.text          // 样品编号
+                var projectId = projectPage.selectedId       
+                var projectName = projectsVm.getNameById(projectId)   // ★ 获取项目名称
                 var source   = tfSampleSource.text      // 样品来源
                 var name     = tfSampleName.text        // 样品名称
                 var batch    = projectsVm.getBatchById(projectPage.selectedId) // 批次编码
@@ -193,21 +223,22 @@ function startTest() {
 
                 // === 组装记录对象 ===
                 var record = {
-                    "projectId": projectPage.selectedId,
-                    "sampleNo": sampleNo,
-                    "sampleSource": source,
-                    "sampleName": name,
-                    "standardCurve": curve,
-                    "batchCode": batch,
-                    "detectedConc": conc,
-                    "referenceValue": ref,
-                    "result": result,
-                    "detectedTime": time,
-                    "detectedUnit": unit,
-                    "detectedPerson": person,
-                    "dilutionInfo": dilution
-                }
-
+                            "projectId": projectId,
+                            "projectName": projectName,   // ★ 写入数据库
+                            "sampleNo": sampleNo,
+                            "sampleSource": source,
+                            "sampleName": name,
+                            "standardCurve": curve,
+                            "batchCode": batch,
+                            "detectedConc": conc,
+                            "referenceValue": ref,
+                            "result": result,
+                            "detectedTime": time,
+                            "detectedUnit": unit,
+                            "detectedPerson": person,
+                            "dilutionInfo": dilution 
+                            }
+ 
                 console.log("[DEBUG] 即将写入数据库:", JSON.stringify(record))
 
                 // === 写入数据库 ===
@@ -1011,9 +1042,10 @@ function startTest() {
 
                         // 列宽 & 行高
                         property int rowHeight: 44
+                        property int w_pname: 140
                         property int w_sel: 44
                         property int w_id: 80
-                        property int w_pid: 80
+                        property int w_pid: 0
                         property int w_no: 120
                         property int w_src: 120
                         property int w_name: 140
@@ -1028,7 +1060,7 @@ function startTest() {
                         property int w_dilution: 120
                         property int totalWidth: w_sel + w_id + w_pid + w_no + w_src + w_name + w_curve +
                                                 w_batch + w_conc + w_ref + w_res + w_time +
-                                                w_unit + w_person + w_dilution
+                                                w_unit + w_person + w_dilution+ w_pname
 
                         // 选中集合
                         property var selectedIds: []
@@ -1161,7 +1193,8 @@ function startTest() {
                                             }
                                         }
                                         Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "ID";       font.bold: true } }
-                                        Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "项目ID";   font.bold: true } }
+                                        Rectangle { width: 0;                      height: parent.height; color: "transparent"; visible: false }
+                                        Rectangle { width: historyPage.w_pname;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "项目名称"; font.bold: true }}
                                         Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品编号"; font.bold: true } }
                                         Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品来源"; font.bold: true } }
                                         Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品名称"; font.bold: true } }
@@ -1228,7 +1261,9 @@ function startTest() {
 
                                                 // 其余列
                                                 Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: modelId } }
-                                                Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectId } }
+                                               // Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectId } }
+                                                Rectangle { width: historyPage.w_pid;      height:parent.height;  visible: false}
+                                                Rectangle { width: historyPage.w_pname;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectName }}
                                                 Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleNo } }
                                                 Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleSource } }
                                                 Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleName } }

@@ -57,47 +57,19 @@ static QVariant pick(const QVariantMap& m, const char* camel, const char* snake)
         return it.value();
     return QVariant();
 }
-
 bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data) {
     if (!db.isOpen()) {
         qWarning() << "[ProjectsRepo] insertProjectInfo: db not open";
         return false;
     }
 
-    // 探测列名风格
-    bool snake = true;  // 默认 snake
-    {
-        QSqlQuery qi(db);
-        if (qi.exec("PRAGMA table_info(project_info);")) {
-            bool hasCamel = false, hasSnake = false;
-            while (qi.next()) {
-                const QString name = qi.value(1).toString();
-                if (name == "projectId" || name == "sampleNo")
-                    hasCamel = true;
-                if (name == "project_id" || name == "sample_no")
-                    hasSnake = true;
-            }
-            snake = hasSnake && !hasCamel;
-        } else {
-            qWarning() << "[ProjectsRepo] PRAGMA table_info fail:" << qi.lastError();
-        }
-    }
-
+    // 选择风格（你的项目本来就是 camelCase）
     const char* sql =
-        snake ?
-              // snake_case
-            "INSERT INTO project_info ("
-            " project_id, sample_no, sample_source, sample_name, standard_curve,"
-            " batch_code, detected_conc, reference_value, result, detected_time,"
-            " detected_unit, detected_person, dilution_info"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
-              :
-              // camelCase
-            "INSERT INTO project_info ("
-            " projectId, sampleNo, sampleSource, sampleName, standardCurve,"
-            " batchCode, detectedConc, referenceValue, result, detectedTime,"
-            " detectedUnit, detectedPerson, dilutionInfo"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        "INSERT INTO project_info ("
+        " projectId, projectName, sampleNo, sampleSource, sampleName, standardCurve,"
+        " batchCode, detectedConc, referenceValue, result, detectedTime,"
+        " detectedUnit, detectedPerson, dilutionInfo"
+        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     QSqlQuery q(db);
     if (!q.prepare(sql)) {
@@ -105,29 +77,29 @@ bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data) {
         return false;
     }
 
-    // 严格绑定 13 个
-    q.addBindValue(pick(data, "projectId", "project_id"));
-    q.addBindValue(pick(data, "sampleNo", "sample_no"));
-    q.addBindValue(pick(data, "sampleSource", "sample_source"));
-    q.addBindValue(pick(data, "sampleName", "sample_name"));
-    q.addBindValue(pick(data, "standardCurve", "standard_curve"));
-    q.addBindValue(pick(data, "batchCode", "batch_code"));
-    q.addBindValue(pick(data, "detectedConc", "detected_conc").toDouble());
-    q.addBindValue(pick(data, "referenceValue", "reference_value").toDouble());
-    q.addBindValue(pick(data, "result", "result"));
-    q.addBindValue(pick(data, "detectedTime", "detected_time"));
-    q.addBindValue(pick(data, "detectedUnit", "detected_unit"));
-    q.addBindValue(pick(data, "detectedPerson", "detected_person"));
-    q.addBindValue(pick(data, "dilutionInfo", "dilution_info"));
+    q.addBindValue(data.value("projectId"));
+    q.addBindValue(data.value("projectName"));  // ★ 新增写入项目名称
+    q.addBindValue(data.value("sampleNo"));
+    q.addBindValue(data.value("sampleSource"));
+    q.addBindValue(data.value("sampleName"));
+    q.addBindValue(data.value("standardCurve"));
+    q.addBindValue(data.value("batchCode"));
+    q.addBindValue(data.value("detectedConc"));
+    q.addBindValue(data.value("referenceValue"));
+    q.addBindValue(data.value("result"));
+    q.addBindValue(data.value("detectedTime"));
+    q.addBindValue(data.value("detectedUnit"));
+    q.addBindValue(data.value("detectedPerson"));
+    q.addBindValue(data.value("dilutionInfo"));
 
-    qInfo() << "[ProjectsRepo][DEBUG] placeholders=13 bound=" << q.boundValues().size()
-            << (snake ? "(snake_case)" : "(camelCase)");
+    qInfo() << "[ProjectsRepo][DEBUG] bound fields = " << q.boundValues().size();
 
     if (!q.exec()) {
         logSqlError("exec(insertProjectInfo)", q);
         return false;
     }
-    qInfo() << "✅ 插入 project_info 成功";
+
+    qInfo() << "✅ 插入 project_info 成功（已写入 projectName）";
     return true;
 }
 

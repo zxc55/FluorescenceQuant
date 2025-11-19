@@ -39,6 +39,7 @@ Q_DECLARE_METATYPE(ProjectRow)
 struct HistoryRow {
     int id = 0;                   // 主键
     int projectId = 0;            // 对应 projects.id
+    QString projectName;          // 项目名称
     QString sampleNo;             // 样品编号
     QString sampleSource;         // 样品来源
     QString sampleName;           // 样品名称

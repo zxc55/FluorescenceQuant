@@ -111,18 +111,32 @@ int main(int argc, char* argv[]) {
     }
 
     // ================= DB线程与Worker =================
-    DBWorker* db = new DBWorker(dbPath);
-    QThread dbThread;
-    db->moveToThread(&dbThread);
+    // DBWorker* db = new DBWorker(dbPath);
+    // QThread dbThread;
+    // db->moveToThread(&dbThread);
 
-    QObject::connect(&dbThread, &QThread::started, db, &DBWorker::initialize, Qt::QueuedConnection);
+    // QObject::connect(&dbThread, &QThread::started, db, &DBWorker::initialize, Qt::QueuedConnection);
 
-    QObject::connect(db, &DBWorker::ready, []() {
-        qInfo() << "[DB] schema ready";
+    // QObject::connect(db, &DBWorker::ready, []() {
+    //     qInfo() << "[DB] schema ready";
+    // });
+    // QObject::connect(db, &DBWorker::errorOccurred, [](const QString& m) {
+    //     qWarning() << "[DB] error:" << m;
+    // });
+    QThread* dbThread = new QThread();
+    DBWorker* db = nullptr;
+
+    QObject::connect(dbThread, &QThread::started, [&, dbPath]() {
+        db = new DBWorker(dbPath);
+        QObject::connect(db, &DBWorker::ready, []() { qInfo() << "[DB] schema ready"; });
+        db->initialize();  // 在正确线程内运行
     });
-    QObject::connect(db, &DBWorker::errorOccurred, [](const QString& m) {
-        qWarning() << "[DB] error:" << m;
+    QObject::connect(dbThread, &QThread::finished, [db]() {
+        if (db)
+            db->deleteLater();
     });
+
+    dbThread->start();
 
     // ================= ViewModels =================
     MainViewModel mainVm;
@@ -135,12 +149,17 @@ int main(int argc, char* argv[]) {
     settingsVm.bindWorker(db);
     userVm.bindWorker(db);
 
-    QObject::connect(db, &DBWorker::ready, [db]() {
-        db->postLoadSettings();
-        db->postLoadUsers();
-        db->postLoadProjects();
-        db->postLoadHistory();  // ✅ 启动时加载历史记录
-    });
+    // QObject::connect(db, &DBWorker::ready, [db]() {
+    //     db->postLoadSettings();
+    //     db->postLoadUsers();
+    //     db->postLoadProjects();
+    //     db->postLoadHistory();  // ✅ 启动时加载历史记录
+    // });
+    QObject::connect(db, &DBWorker::ready, db, [db]() {
+    db->postLoadSettings();
+    db->postLoadUsers();
+    db->postLoadProjects();
+    db->postLoadHistory(); }, Qt::QueuedConnection);
 
     // ================= 打印机初始化 =================
     PrinterManager& printer = PrinterManager::instance();
@@ -173,14 +192,14 @@ int main(int argc, char* argv[]) {
         Qt::QueuedConnection);
     engine.load(url);
 
-    // 启动 DB 线程
-    dbThread.start();
+    // // 启动 DB 线程
+    // dbThread.start();
 
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
-        dbThread.quit();
-        dbThread.wait();
-        db->deleteLater();
-    });
+    // QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
+    //     dbThread.quit();
+    //     dbThread.wait();
+    //     db->deleteLater();
+    // });
 
     return app.exec();
 }

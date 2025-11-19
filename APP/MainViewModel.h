@@ -19,12 +19,14 @@ public:
     explicit MainViewModel(QObject* parent = nullptr);
     ~MainViewModel();
     Q_INVOKABLE QVariantMap calcTC(const QVariantList& adcList);
+    Q_INVOKABLE QVariantMap calcTC_FixedWindow(const QVariantList& adcList);
 public slots:
     void startReading();
     void stopReading();
     void setCurrentSample(const QString& sampleNo);
     Q_INVOKABLE QVariantList getAdcDataBySample(const QString& sampleNo);
     Q_INVOKABLE QVariantList getAdcData(const QString& sampleNo);
+
 signals:
     void newDataBatch(const QVector<double>& values);
 

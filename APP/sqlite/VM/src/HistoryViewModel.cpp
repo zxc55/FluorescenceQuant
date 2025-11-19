@@ -46,6 +46,8 @@ QVariant HistoryViewModel::data(const QModelIndex& index, int role) const {
         return r.id;
     case ProjectIdRole:
         return r.projectId;
+    case ProjectNameRole:
+        return r.projectName;
     case SampleNoRole:
         return r.sampleNo;
     case SampleSourceRole:
@@ -79,6 +81,7 @@ QHash<int, QByteArray> HistoryViewModel::roleNames() const {
     QHash<int, QByteArray> roles;
     roles[IdRole] = "id";
     roles[ProjectIdRole] = "projectId";
+    roles[ProjectNameRole] = "projectName";
     roles[SampleNoRole] = "sampleNo";
     roles[SampleSourceRole] = "sampleSource";
     roles[SampleNameRole] = "sampleName";
@@ -183,6 +186,7 @@ QVariantMap HistoryViewModel::getById(int id) const {
         if (r.id == id) {
             map["id"] = r.id;
             map["projectId"] = r.projectId;
+            map["projectName"] = r.projectName;
             map["sampleNo"] = r.sampleNo;
             map["sampleSource"] = r.sampleSource;
             map["sampleName"] = r.sampleName;

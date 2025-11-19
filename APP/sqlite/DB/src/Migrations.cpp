@@ -21,37 +21,43 @@ static bool execOne(QSqlQuery& q, const QString& sql) {
 static bool migrateProjectInfo(QSqlDatabase& db) {
     QSqlQuery q(db);
 
-    // 检查 batchCode 的 DEFAULT 是否存在
     q.exec("PRAGMA table_info(project_info)");
-    bool need = false;
+    bool needMigrate = false;
+    bool hasProjectName = false;
+    bool batchDefaultWrong = false;
 
     while (q.next()) {
         QString col = q.value(1).toString();
         QString dflt = q.value(4).toString();
 
+        if (col == "projectName")
+            hasProjectName = true;
+
         if (col == "batchCode") {
-            // 如果默认值不是空字符串 → 旧版本，需要迁移
-            if (dflt != "''" && dflt != "") {
-                need = true;
-            }
+            if (dflt != "''" && dflt != "")
+                batchDefaultWrong = true;
         }
     }
 
-    if (!need) {
-        qInfo() << "[MIGRATE] project_info 表结构正常，不需要迁移";
+    // 如果 projectName 缺失 或 batchCode 默认值错误 → 需要重建表
+    needMigrate = (!hasProjectName || batchDefaultWrong);
+
+    if (!needMigrate) {
+        qInfo() << "[MIGRATE] project_info 表结构正常，无需迁移";
         return true;
     }
 
-    qWarning() << "⚠️ project_info 表结构为旧版 → 开始迁移修复";
+    qWarning() << "⚠️ project_info 表结构为旧版，需要迁移修复";
 
-    // 1. 旧表改名
+    // 1) 旧表改名
     execOne(q, "ALTER TABLE project_info RENAME TO project_info_old;");
 
-    // 2. 新建 project_info（最终新版结构）
+    // 2) 新建 project_info（最终版本结构）
     execOne(q, R"SQL(
 CREATE TABLE project_info(
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     projectId       INTEGER NOT NULL,
+    projectName     TEXT NOT NULL DEFAULT '',
     sampleNo        TEXT NOT NULL DEFAULT '',
     sampleSource    TEXT NOT NULL DEFAULT '',
     sampleName      TEXT NOT NULL DEFAULT '',
@@ -68,7 +74,7 @@ CREATE TABLE project_info(
 );
 )SQL");
 
-    // 3. 迁移旧表的数据
+    // 3) 迁移旧表数据（旧表没有 projectName 字段）
     execOne(q, R"SQL(
 INSERT INTO project_info(
     id, projectId, sampleNo, sampleSource, sampleName, standardCurve,
@@ -82,7 +88,7 @@ SELECT
 FROM project_info_old;
 )SQL");
 
-    // 4. 删除旧表
+    // 4) 删除旧表
     execOne(q, "DROP TABLE project_info_old;");
 
     qInfo() << "✅ project_info 表结构迁移完成";
@@ -90,7 +96,7 @@ FROM project_info_old;
 }
 
 // =========================
-//  主迁移入口（完整初始化）
+//  主迁移入口
 // =========================
 bool migrateAllToV1(QSqlDatabase db) {
     if (!db.isOpen()) {
@@ -164,11 +170,12 @@ SELECT '玉米赤霉烯酮','B2025-003',datetime('now','localtime')
 WHERE (SELECT COUNT(1) FROM projects)=2;
 )SQL");
 
-    // ===== project_info（旧表不会被更新，因此需要额外迁移）=====
+    // ===== project_info（创建新版结构，如果是旧结构则 migration 修复）=====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS project_info(
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     projectId       INTEGER NOT NULL,
+    projectName     TEXT NOT NULL DEFAULT '',
     sampleNo        TEXT NOT NULL DEFAULT '',
     sampleSource    TEXT NOT NULL DEFAULT '',
     sampleName      TEXT NOT NULL DEFAULT '',
@@ -185,7 +192,7 @@ CREATE TABLE IF NOT EXISTS project_info(
 );
 )SQL");
 
-    // ★★★★★ 必须执行（修复旧表结构）
+    // ===== 修复旧结构 =====
     migrateProjectInfo(db);
 
     // ===== adc_data =====

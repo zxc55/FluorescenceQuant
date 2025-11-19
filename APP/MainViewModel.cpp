@@ -12,6 +12,7 @@
 #include <thread>
 
 #include "IIODeviceController.h"
+#define PEAK_NEIGHBOR_COUNT 5
 class ScopedTimer {
 public:
     explicit ScopedTimer(const QString& tag)
@@ -248,158 +249,187 @@ QVariantList MainViewModel::getAdcData(const QString& sampleNo) {
     qInfo() << "[MainViewModel] 曲线点数=" << result.size();
     return result;
 }
+static double avgPeak(const QVector<double>& y, int idx) {
+    int n = y.size();
+    double sum = 0;
+    int count = 0;
+
+    for (int k = -PEAK_NEIGHBOR_COUNT; k <= PEAK_NEIGHBOR_COUNT; ++k) {
+        int p = idx + k;
+        if (p >= 0 && p < n) {
+            sum += y[p];
+            count++;
+        }
+    }
+    return (count > 0 ? sum / count : 0.0);
+}
 QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
     QVariantMap r;
 
-    r["hasT"] = false;
-    r["hasC"] = false;
-    r["areaT"] = 0.0;
-    r["areaC"] = 0.0;
-    r["ratioTC"] = 0.0;
-    r["valid"] = false;
-
-    const int n = adcList.size();
-    if (n < 200)
+    int n = adcList.size();
+    if (n < 1500) {
+        qWarning() << "[calcTC] curve too short";
         return r;
+    }
 
-    // ===== 1. 转成 double =====
     QVector<double> y(n);
     for (int i = 0; i < n; ++i)
         y[i] = adcList[i].toDouble();
 
-    // ===== 2. 基线（局部最小值滤波）=====
-    const int win = 20;
-    QVector<double> baseline(n);
-
-    for (int i = 0; i < n; ++i) {
-        int L = qMax(0, i - win);
-        int R = qMin(n - 1, i + win);
-        double mn = y[L];
-        for (int j = L; j <= R; ++j)
-            mn = qMin(mn, y[j]);
-        baseline[i] = mn;
-    }
-
-    // ===== 3. 去基线 corr =====
-    QVector<double> corr(n);
-    double maxCorr = 0;
-
-    for (int i = 0; i < n; ++i) {
-        double v = y[i] - baseline[i];
-        if (v < 0)
-            v = 0;
-        corr[i] = v;
-        if (v > maxCorr)
-            maxCorr = v;
-    }
-
-    if (maxCorr < 1e-6)
-        return r;
-
-    // ===== 4. 自动找峰（局部最大）=====
-    struct Peak {
-        int idx;
-        double h;
-    };
-    QVector<Peak> peaks;
-
-    double thresh = maxCorr * 0.20;  // 过滤很小的噪声峰
-
-    for (int i = 1; i < n - 1; ++i) {
-        if (corr[i] > thresh &&
-            corr[i] >= corr[i - 1] &&
-            corr[i] >= corr[i + 1]) {
-            peaks.append({i, corr[i]});
+    // 1) 找 C 峰（从 666 后）
+    int idxC = -1;
+    double maxC = -1;
+    for (int i = 666; i < n; ++i)
+        if (y[i] > maxC) {
+            maxC = y[i];
+            idxC = i;
         }
-    }
 
-    if (peaks.isEmpty())
-        return r;
-
-    // 排序（高度从大到小）
-    std::sort(peaks.begin(), peaks.end(),
-              [](const Peak& a, const Peak& b) { return a.h > b.h; });
-
-    // ===== 5. 至少间隔 50 点，取 2 个峰 =====
-    QVector<Peak> sel;
-    const int minDist = 50;
-
-    for (auto& p : peaks) {
-        bool ok = true;
-        for (auto& s : sel) {
-            if (qAbs(p.idx - s.idx) < minDist)
-                ok = false;
+    // 2) 找 T 峰（从 1250 后）
+    int idxT = -1;
+    double maxT = -1;
+    for (int i = 1250; i < n; ++i)
+        if (y[i] > maxT) {
+            maxT = y[i];
+            idxT = i;
         }
-        if (ok)
-            sel.append(p);
-        if (sel.size() >= 2)
-            break;
-    }
 
-    // 按位置排序（左=T，右=C）
-    std::sort(sel.begin(), sel.end(),
-              [](const Peak& a, const Peak& b) { return a.idx < b.idx; });
-
-    // ===== 6. 峰面积（10%高度阈值，全峰积分）=====
-    auto integratePeak = [&](int center) -> double {
-        double h10 = corr[center] * 0.10;  // 10% 阈值
-
-        int L = center;
-        while (L > 0 && corr[L] > h10)
-            L--;
-
-        int R = center;
-        while (R < n - 1 && corr[R] > h10)
-            R++;
-
-        double area = 0.0;
-        for (int i = L + 1; i <= R; ++i)
-            area += 0.5 * (corr[i] + corr[i - 1]);
-
-        return area;
-    };
-
-    double areaT = 0, areaC = 0;
-    bool hasT = false, hasC = false;
-
-    // ===== 7. 单峰 or 双峰 =====
-    if (sel.size() == 1) {
-        int idx = sel[0].idx;
-        if (idx > n * 0.45) {  // 靠右 → C 线
-            hasC = true;
-            areaC = integratePeak(idx);
-        } else {
-            hasT = true;
-            areaT = integratePeak(idx);
-        }
-    } else if (sel.size() >= 2) {
-        hasT = true;
-        hasC = true;
-        areaT = integratePeak(sel[0].idx);  // 左峰 → T
-        areaC = integratePeak(sel[1].idx);  // 右峰 → C
-    }
-
-    // ===== 8. C 线不存在 → 无效卡 =====
-    if (!hasC) {
-        r["valid"] = false;
-        return r;
-    }
-    r["valid"] = true;
-
-    // ===== 9. 只有 C → 阴性卡 =====
-    if (hasC && !hasT) {
-        r["hasC"] = true;
-        r["areaC"] = areaC;
-        r["ratioTC"] = 0;
+    if (idxC < 0 || idxT < 0) {
+        qWarning() << "[calcTC] peak not found";
         return r;
     }
 
-    // ===== 10. T+C 正常卡 =====
-    r["hasT"] = hasT;
-    r["hasC"] = hasC;
-    r["areaT"] = areaT;
-    r["areaC"] = areaC;
-    r["ratioTC"] = (areaC > 0 ? areaT / areaC : 0.0);
+    // 3) 峰值（左右 PEAK_NEIGHBOR_COUNT 个点）
+    double C_raw = avgPeak(y, idxC);
+    double T_raw = avgPeak(y, idxT);
+
+    // 4) 本底 = 两峰之间最小值
+    int a = qMin(idxC, idxT);
+    int b = qMax(idxC, idxT);
+    double baseline = y[a];
+    for (int i = a; i <= b; i++)
+        if (y[i] < baseline)
+            baseline = y[i];
+
+    // 5) 扣本底
+    double C_net = C_raw - baseline;
+    double T_net = T_raw - baseline;
+    if (C_net < 0)
+        C_net = 0;
+    if (T_net < 0)
+        T_net = 0;
+
+    // 6) 比值
+    double ratio = (C_net > 0) ? (T_net / C_net) : 0;
+
+    // 7) 输出
+    r["idxC"] = idxC;
+    r["idxT"] = idxT;
+    r["C_raw"] = C_raw;
+    r["T_raw"] = T_raw;
+    r["baseline"] = baseline;
+    r["C_net"] = C_net;
+    r["T_net"] = T_net;
+    r["ratioTC"] = ratio;
+
+    qInfo()
+        << "[calcTC]"
+        << "idxC=" << idxC
+        << "idxT=" << idxT
+        << "C_raw=" << C_raw
+        << "T_raw=" << T_raw
+        << "baseline=" << baseline
+        << "C_net=" << C_net
+        << "T_net=" << T_net
+        << "ratio=" << ratio;
 
     return r;
+}
+QVariantMap MainViewModel::calcTC_FixedWindow(const QVariantList& adcList) {
+    QVariantMap result;
+    result["hasT"] = false;
+    result["hasC"] = false;
+    result["areaT"] = 0.0;
+    result["areaC"] = 0.0;
+    result["ratioTC"] = 0.0;
+
+    const int n = adcList.size();
+    if (n < 100) {
+        // 点太少，直接返回
+        return result;
+    }
+
+    // 1) 把 QVariantList 转成 double 数组，方便运算
+    QVector<double> y(n);
+    for (int i = 0; i < n; ++i) {
+        y[i] = adcList[i].toDouble();
+    }
+
+    // 2) 固定窗口索引（❗你需要根据自己的卡，自己微调这四个数字）
+    //   假设峰位置大概是：
+    //   T 峰：索引在 600~900
+    //   C 峰：索引在 1500~1800
+    //   你可以先用 qDebug 把峰位置打印一下，然后改成更合适的值
+    const int T_START = 600;
+    const int T_END = 900;
+    const int C_START = 1500;
+    const int C_END = 1800;
+
+    // 防止越界，做一下裁剪
+    const int tStart = qBound(0, T_START, n - 1);
+    const int tEnd = qBound(0, T_END, n - 1);
+    const int cStart = qBound(0, C_START, n - 1);
+    const int cEnd = qBound(0, C_END, n - 1);
+
+    if (tEnd <= tStart || cEnd <= cStart) {
+        return result;  // 窗口非法
+    }
+
+    // 3) 计算每个窗口内的“局部基线”（取窗口内最小值）
+    double baseT = y[tStart];
+    for (int i = tStart + 1; i <= tEnd; ++i) {
+        if (y[i] < baseT)
+            baseT = y[i];
+    }
+
+    double baseC = y[cStart];
+    for (int i = cStart + 1; i <= cEnd; ++i) {
+        if (y[i] < baseC)
+            baseC = y[i];
+    }
+
+    // 4) 在各自窗口内做简单积分：Σ max(0, y[i] - base)
+    double areaT = 0.0;
+    for (int i = tStart; i <= tEnd; ++i) {
+        double v = y[i] - baseT;  // 去掉局部基线
+        if (v > 0.0)
+            areaT += v;  // 直接累加
+    }
+
+    double areaC = 0.0;
+    for (int i = cStart; i <= cEnd; ++i) {
+        double v = y[i] - baseC;
+        if (v > 0.0)
+            areaC += v;
+    }
+
+    // 5) 判断有没有峰（面积大于一个门限就认为存在）
+    const double MIN_AREA = 0.3;  // 这个阈值你可以根据实际噪声调整
+
+    bool hasT = (areaT > MIN_AREA);
+    bool hasC = (areaC > MIN_AREA);
+
+    double ratioTC = 0.0;
+    if (hasT && hasC && areaC > 0.0) {
+        ratioTC = areaT / areaC;  // 与别的仪器一样，用面积比值
+    }
+
+    // 6) 写回结果，给 QML 用
+    result["hasT"] = hasT;
+    result["hasC"] = hasC;
+    result["areaT"] = areaT;
+    result["areaC"] = areaC;
+    result["ratioTC"] = ratioTC;
+
+    return result;
 }
