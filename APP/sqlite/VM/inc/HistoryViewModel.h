@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE bool exportCsv(const QString& filePath) const;  // 导出 CSV 文件
     Q_INVOKABLE bool deleteById(int id);                        // 按 id 删除记录
     Q_INVOKABLE QVariantMap getById(int id) const;              // ✅ 新增：QML可调用
+    Q_INVOKABLE QVariantMap getRow(int row) const;
 
 signals:
     void countChanged();

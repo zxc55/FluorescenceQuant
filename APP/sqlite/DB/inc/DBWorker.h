@@ -83,9 +83,6 @@ private:
 
     bool authInternal(const QString& u, const QString& p, QString& outRole);
     bool loadUsersInternal(QVector<UserRow>& out);
-    bool addUserInternal(const QString& u, const QString& p, const QString& role, const QString& note);
-    bool deleteUserInternal(const QString& u);
-    bool resetPasswordInternal(const QString& u, const QString& p);
 
     bool loadProjectsInternal(QVector<ProjectRow>& out);
     bool deleteProjectInternal(int id);

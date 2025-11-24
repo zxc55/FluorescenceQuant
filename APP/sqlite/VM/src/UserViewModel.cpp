@@ -6,21 +6,32 @@ UserViewModel::UserViewModel(QObject* p) : QObject(p) {}
 
 void UserViewModel::bindWorker(DBWorker* w) {
     worker_ = w;
-    // 连接 DB 回调
-    QObject::connect(worker_, &DBWorker::authResult, this, &UserViewModel::onAuthResult);
-    QObject::connect(worker_, &DBWorker::usersLoaded, this, &UserViewModel::onUsersLoaded);
-    QObject::connect(worker_, &DBWorker::userAdded, this, &UserViewModel::onUserAdded);
-    QObject::connect(worker_, &DBWorker::userDeleted, this, &UserViewModel::onUserDeleted);
-    QObject::connect(worker_, &DBWorker::passwordReset, this, &UserViewModel::onPasswordReset);
+
+    // 登录回调
+    QObject::connect(worker_, &DBWorker::authResult,
+                     this, &UserViewModel::onAuthResult);
+
+    // 管理员加载用户列表
+    QObject::connect(worker_, &DBWorker::usersLoaded,
+                     this, &UserViewModel::onUsersLoaded);
 }
 
+// ================================
+// 登录（异步）
+// ================================
 void UserViewModel::login(const QString& u, const QString& p) {
     loginMsg_.clear();
     emit loginMsgChanged();
+
     if (!worker_)
         return;
+
     worker_->postAuthLogin(u, p);
 }
+
+// ================================
+// 登出
+// ================================
 void UserViewModel::logout() {
     loggedIn_ = false;
     username_.clear();
@@ -28,61 +39,48 @@ void UserViewModel::logout() {
     emit loggedInChanged();
 }
 
+// ================================
+// 加载用户列表（仅管理员）
+// ================================
 void UserViewModel::loadUsers() {
     if (!worker_)
         return;
-    if (role_ != "Admin")
-        return;  // UI 层简单限制；真正安全应服务端检查（内置）
+    if (role_ != "admin")
+        return;
+
     worker_->postLoadUsers();
 }
-void UserViewModel::addUser(const QString& u, const QString& p, const QString& role, const QString& note) {
-    if (!worker_)
-        return;
-    if (role_ != "Admin")
-        return;
-    worker_->postAddUser(u, p, role, note);
-}
-void UserViewModel::deleteUser(const QString& u) {
-    if (!worker_)
-        return;
-    if (role_ != "Admin")
-        return;
-    worker_->postDeleteUser(u);
-}
-void UserViewModel::resetPassword(const QString& u, const QString& newPass) {
-    if (!worker_)
-        return;
-    if (role_ != "Admin")
-        return;
-    worker_->postResetPassword(u, newPass);
-}
 
-void UserViewModel::onAuthResult(bool ok, const QString& u, const QString& role) {
+void UserViewModel::onAuthResult(bool ok, const QString& u, const QString& roleStr) {
     if (!ok) {
+        // 登录失败 ——— 必须通知 QML！
+        loggedIn_ = false;
+        username_.clear();
+        role_.clear();
+
         loginMsg_ = "用户名或密码错误";
+
         emit loginMsgChanged();
+        emit loggedInChanged();  // ← 非常重要！！！
+
         return;
     }
+
+    // 登录成功
     loggedIn_ = true;
     username_ = u;
-    role_ = role;
-    emit loggedInChanged();
-    // 登录后，若是管理员，自动加载一次用户列表
-    if (role_ == "Admin" && worker_)
-        worker_->postLoadUsers();
+    role_ = roleStr.toLower();  // ← 统一角色大小写：admin / engineer / operator
+
+    emit loggedInChanged();  // 通知 QML 登录成功
+
+    // 管理员加载用户列表
+    // if (role_ == "admin" && worker_)
+    //     worker_->postLoadUsers();
 }
+
+// ================================
+// 加载用户列表回调
+// ================================
 void UserViewModel::onUsersLoaded(const QVector<UserRow>& rows) {
     users_.setItems(rows);
-}
-void UserViewModel::onUserAdded(bool ok, const QString& u) {
-    if (!ok)
-        qWarning() << "[UserVM] add fail" << u;
-}
-void UserViewModel::onUserDeleted(bool ok, const QString& u) {
-    if (!ok)
-        qWarning() << "[UserVM] del fail" << u;
-}
-void UserViewModel::onPasswordReset(bool ok, const QString& u) {
-    if (!ok)
-        qWarning() << "[UserVM] reset fail" << u;
 }

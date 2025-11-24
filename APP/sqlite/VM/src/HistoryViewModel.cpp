@@ -208,3 +208,14 @@ QVariantMap HistoryViewModel::getById(int id) const {
 
     return map;
 }
+QVariantMap HistoryViewModel::getRow(int row) const {
+    QVariantMap map;
+
+    if (row < 0 || row >= m_rows.size())
+        return map;
+
+    const HistoryRow& r = m_rows[row];
+
+    map["id"] = r.id;
+    return map;
+}

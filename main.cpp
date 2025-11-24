@@ -148,13 +148,6 @@ int main(int argc, char* argv[]) {
     // 绑定 Worker
     settingsVm.bindWorker(db);
     userVm.bindWorker(db);
-
-    // QObject::connect(db, &DBWorker::ready, [db]() {
-    //     db->postLoadSettings();
-    //     db->postLoadUsers();
-    //     db->postLoadProjects();
-    //     db->postLoadHistory();  // ✅ 启动时加载历史记录
-    // });
     QObject::connect(db, &DBWorker::ready, db, [db]() {
     db->postLoadSettings();
     db->postLoadUsers();

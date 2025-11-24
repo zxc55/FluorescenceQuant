@@ -3,8 +3,8 @@ import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 
-import QtQuick.VirtualKeyboard 2.0
-import QtQuick.VirtualKeyboard.Settings 2.0
+// import QtQuick.VirtualKeyboard 2.0
+// import QtQuick.VirtualKeyboard.Settings 2.0
 import App 1.0
 import Motor 1.0
 ApplicationWindow {
@@ -58,15 +58,15 @@ ApplicationWindow {
     }
 
     // 键盘面板
-    InputPanel {
-        id: panel
-        z: 9999
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        visible: Qt.inputMethod.visible
-        parent: win
-    }
+    // InputPanel {
+    //     id: panel
+    //     z: 9999
+    //     anchors.left: parent.left
+    //     anchors.right: parent.right
+    //     anchors.bottom: parent.bottom
+    //     visible: Qt.inputMethod.visible
+    //     parent: win
+    // }
 
     // 顶部栏
     Rectangle {

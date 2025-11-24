@@ -59,31 +59,98 @@ ApplicationWindow {
         console.log("【初始化】开始回原点…")
         zeroHomeTimer.start()
     }
-Timer {
-    id: zeroHomeTimer
-    interval: 300
-    repeat: true
-    running: false
 
-    onTriggered: {
-        var val = motor.readRegister(0x34)
-        console.log("🔍 原点状态 0x34 =", val)
+    Timer {
+        id: zeroHomeTimer
+        interval: 300
+        repeat: true
+        running: false
 
-        if (val === 1) {
-            zeroHomeTimer.stop()
-            console.log("🎉 回原点成功 → 2 秒后执行 motor.runPosition")
+        onTriggered: {
+            var val = motor.readRegister(0x34)
+            console.log("🔍 原点状态 0x34 =", val)
 
-            var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false }', win)
-            t.triggered.connect(function() {
-                console.log("🚀 开始运行 motor.runPosition")
-                motor.runPosition(1, 0, 150, 45000)
-                t.destroy()  // 清理 Timer
-            })
-            t.start()   // ★★ 必须启动
+            if (val === 1) {
+                zeroHomeTimer.stop()
+                console.log("🎉 回原点成功 → 2 秒后执行 motor.runPosition")
+
+                var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false }', win)
+                t.triggered.connect(function() {
+                    console.log("🚀 开始运行 motor.runPosition")
+                    motor.runPosition(1, 0, 150, 45000)
+                    t.destroy()  // 清理 Timer
+                })
+                t.start()   // ★★ 必须启动
+            }
         }
     }
-}
+    Connections {
+        target: userVm
 
+        onLoggedInChanged: {
+            if (userVm.loggedIn) {
+                console.log("登录成功 role =", userVm.roleName)
+                loginLayer.visible = false      // 隐藏登录界面
+            } else {
+                console.log("登录失败")
+            }
+        }
+    }
+    // =====================================================
+    // 登录遮罩层
+    // =====================================================
+    Rectangle {
+        id: loginLayer
+        anchors.fill: parent
+        color: "#AA000000"    // 半透明黑色遮罩
+        z: 999                // 始终覆盖最前面
+        visible: true         // 程序启动时显示登录界面
+
+        Rectangle {
+            id: panel_login
+            width: 380
+            height: 260
+            radius: 20
+            color: "white"
+            anchors.centerIn: parent
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 18
+
+                Text {
+                    text: "用户登录"
+                    font.pixelSize: 26
+                    font.bold: true
+                    color: "#333"
+                }
+
+                ComboBox {
+                    id: usernameField
+                    width: 260
+                    model: ["admin", "eng", "op"]
+                    currentIndex: 0
+                }
+
+                TextField {
+                    id: passwordField
+                    width: 260
+                    echoMode: TextInput.Password
+                    placeholderText: "密码"
+                }
+
+                Button {
+                    width: 260
+                    text: "登录"
+
+                    onClicked: {
+                        var user = usernameField.model[usernameField.currentIndex]
+                        userVm.login(user, passwordField.text)
+                    }
+                }
+            }
+        }
+    }
 
     // 键盘面板
     InputPanel {
@@ -1061,7 +1128,18 @@ function startTest() {
                         property int totalWidth: w_sel + w_id + w_pid + w_no + w_src + w_name + w_curve +
                                                 w_batch + w_conc + w_ref + w_res + w_time +
                                                 w_unit + w_person + w_dilution+ w_pname
+                        function selectAll() {
+                            var arr = []
+                            for (var i = 0; i < historyVm.count; ++i) {
+                                var row = historyVm.getRow(i)
+                                arr.push(row.id)
+                            }
+                            selectedIds = arr
+                        }
 
+                        function unselectAll() {
+                            selectedIds = []
+                        }
                         // 选中集合
                         property var selectedIds: []
 
@@ -1117,6 +1195,20 @@ function startTest() {
                                 RowLayout {
                                     spacing: 10
                                     Button { text: "刷新"; onClicked: historyVm.refresh() }
+                                    
+                                    Button {
+                                        text: "全选"
+                                        onClicked: {
+                                        historyPage.selectAll()
+                                        }
+                                    }
+
+                                     Button {
+                                            text: "反选"
+                                            onClicked: {
+                                            historyPage.unselectAll()
+                                            }
+                                        }
                                     Button {
                                         text: "删除选中"
                                         enabled: historyPage.selectedIds.length > 0
@@ -1145,6 +1237,7 @@ function startTest() {
                                             }
                                         }
                                     }
+
                                 }
                             }
 
@@ -1182,15 +1275,6 @@ function startTest() {
                                         // 选择列（全选）
                                         Rectangle {
                                             width: historyPage.w_sel; height: parent.height; color: "transparent"
-                                            CheckBox {
-                                                id: cbSelectAll
-                                                anchors.centerIn: parent
-                                                tristate: false
-                                                checked: (historyPage.selectedIds.length > 0
-                                                        && historyPage.selectedIds.length === listView.count
-                                                        && listView.count > 0)
-                                                onClicked: historyPage.selectAllOnPage(checked)
-                                            }
                                         }
                                         Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "ID";       font.bold: true } }
                                         Rectangle { width: 0;                      height: parent.height; color: "transparent"; visible: false }

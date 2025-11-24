@@ -78,15 +78,6 @@ void DBWorker::initialize() {
                    : emit errorOccurred("读取用户失败");
                 break;
             }
-            case DBTaskType::AddUser:
-                emit userAdded(addUserInternal(task.s1, task.s2, task.s3, task.s4), task.s1);
-                break;
-            case DBTaskType::DeleteUser:
-                emit userDeleted(deleteUserInternal(task.s1), task.s1);
-                break;
-            case DBTaskType::ResetPassword:
-                emit passwordReset(resetPasswordInternal(task.s1, task.s2), task.s1);
-                break;
             case DBTaskType::LoadProjects: {
                 QVector<ProjectRow> rows;
                 bool ok = loadProjectsInternal(rows);
@@ -261,18 +252,7 @@ bool DBWorker::loadUsersInternal(QVector<UserRow>& out) {
     QSqlDatabase db = QSqlDatabase::database(connName_);
     return UsersRepo::selectAll(db, out);
 }
-bool DBWorker::addUserInternal(const QString& u, const QString& p, const QString& role, const QString& note) {
-    QSqlDatabase db = QSqlDatabase::database(connName_);
-    return UsersRepo::addUser(db, u, p, role, note);
-}
-bool DBWorker::deleteUserInternal(const QString& u) {
-    QSqlDatabase db = QSqlDatabase::database(connName_);
-    return UsersRepo::deleteUser(db, u);
-}
-bool DBWorker::resetPasswordInternal(const QString& u, const QString& p) {
-    QSqlDatabase db = QSqlDatabase::database(connName_);
-    return UsersRepo::resetPassword(db, u, p);
-}
+
 bool DBWorker::loadProjectsInternal(QVector<ProjectRow>& out) {
     QSqlDatabase db = QSqlDatabase::database(connName_);
     return ProjectsRepo::selectAll(db, out);

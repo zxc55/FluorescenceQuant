@@ -16,14 +16,11 @@ Q_DECLARE_METATYPE(AppSettingsRow)
 
 // 用户表（users）
 struct UserRow {
-    int id = 0;
-    QString username;     // 唯一
-    QString role;         // admin/engineer/operator
-    QString roleName;     // 友好显示名（例如 “管理员/工程师/操作员”）
-    QString saltHex;      // 随机盐（十六进制）
-    QString passHashHex;  // SHA256(salt+password) 的十六进制
-    bool active = true;
-    QString note;  // 备注
+    int id;
+    QString username;
+    QString role;
+    QString roleName;
+    QString note;
 };
 Q_DECLARE_METATYPE(UserRow)
 struct ProjectRow {
