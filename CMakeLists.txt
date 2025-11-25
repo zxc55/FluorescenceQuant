@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(FluorescenceQuant LANGUAGES CXX)
+project(FluorescenceQuant LANGUAGES CXX C)
 if(${TARGET_BOARD} STREQUAL "全志T113-S3")
    set(compilerType "QuanZhi")
     message(STATUS "使用全志T113-S3编译")
@@ -17,6 +17,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)     # 自动处理 qrc
 set(CMAKE_AUTOUIC OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(cmakes/GenerateRcc.cmake)
 
@@ -72,11 +73,19 @@ endif()
 
 
 
+# 自动收集 APP/Recognition 下所有 .cpp / .h
+file(GLOB_RECURSE RECOGNITION_SOURCES
+    ${CMAKE_SOURCE_DIR}/APP/Recognition/*.cpp
+    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.cpp
+    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.c
+    ${CMAKE_SOURCE_DIR}/APP/Scanner/*.cpp
+)
 
-
-
-
-
+file(GLOB_RECURSE RECOGNITION_HEADERS
+    ${CMAKE_SOURCE_DIR}/APP/Recognition/*.h
+    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.h
+    ${CMAKE_SOURCE_DIR}/APP/Scanner/*.h
+)
 # -----------------------------------------------
 # 包含路径
 # -----------------------------------------------
@@ -84,7 +93,8 @@ include_directories(${CMAKE_SOURCE_DIR}/APP/ADS1115/inc)
 include_directories(${CMAKE_SOURCE_DIR}/APP/EM5820H/inc)
 include_directories(${CMAKE_SOURCE_DIR}/APP/libmodbus/include)
 include_directories(${CMAKE_SOURCE_DIR}/APP/modbus_rtu/inc)
-
+include_directories(${CMAKE_SOURCE_DIR}/APP/Recognition)
+include_directories(${CMAKE_SOURCE_DIR}/APP/QUIRC)
 # -----------------------------------------------
 # 源文件与头文件
 # -----------------------------------------------
@@ -113,6 +123,7 @@ set(SOURCES
     APP/MyQmlComponents/MyCurveLoader/CurveLoader.cpp
    # APP/MyQmlComponents/MyPlotView/PlotView.cpp
     APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.cpp
+ 
 )
 
 set(HEADERS
@@ -145,13 +156,16 @@ set(HEADERS
     APP/MyQmlComponents/MyCurveLoader/CurveLoader.h
    # APP/MyQmlComponents/MyPlotView/PlotView.h
     APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h
-    
+
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
     ${HEADERS}
     ${QRC_FILE}
     ${APP_RCS}
+    ${RECOGNITION_SOURCES}
+    ${RECOGNITION_HEADERS}
+
 )
 link_directories(${CMAKE_SOURCE_DIR}/APP/libmodbus/lib)
 target_include_directories(FluorescenceQuant PRIVATE

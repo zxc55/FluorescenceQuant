@@ -20,6 +20,13 @@ public:
     ~MainViewModel();
     Q_INVOKABLE QVariantMap calcTC(const QVariantList& adcList);
     Q_INVOKABLE QVariantMap calcTC_FixedWindow(const QVariantList& adcList);
+    struct FourPLParams {
+        double A;  // 曲线高端（低浓度）
+        double B;  // 斜率
+        double C;  // 中点浓度
+        double D;  // 曲线低端（高浓度）
+    };
+
 public slots:
     void startReading();
     void stopReading();

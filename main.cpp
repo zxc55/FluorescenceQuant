@@ -14,22 +14,26 @@
 #include "APP/MyQmlComponents/MyLineSeries/MyLineSeries.h"
 // ====== 你的工程头文件 ======
 #include "CardWatcherStd.h"
+#include "DecodeWorker.h"
 #include "HistoryViewModel.h"
 #include "IIODeviceController.h"
 #include "KeysProxy.h"
 #include "MainViewModel.h"
 #include "MotorController.h"
 #include "PrinterManager.h"
-
+#include "V4L2MjpegGrabber.h"
 // ====== SQLite / ViewModels / DB 线程 ======
 #include "APP/MyQmlComponents/MyCurveLoader/CurveLoader.h"
 #include "APP/MyQmlComponents/MyPlotView/PlotView.h"
 #include "APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h"
+#include "APP/Scanner/QrImageProvider.h"
+#include "APP/Scanner/QrScanner.h"
 #include "DBWorker.h"
 #include "DTO.h"
 #include "ProjectsViewModel.h"
 #include "SettingsViewModel.h"
 #include "UserViewModel.h"
+
 static bool ensureDir(const QString& path) {
     QDir d;
     return d.exists(path) ? true : d.mkpath(path);
@@ -51,13 +55,13 @@ static void setupQtDpiAndPlatform() {
 
 int main(int argc, char* argv[]) {
     setupQtDpiAndPlatform();
+    qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
 #ifndef LOCAL_BUILD
 
     // —— 输入法/触摸相关 —— //
-    qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
     qputenv("QT_QPA_PLATFORM", QByteArray("linuxfb:tty=/dev/fb0:size=1024x600:mmsize=271x159,tslib=1"));
     qputenv("QT_QPA_FB_TSLIB", QByteArray("1"));
-    qputenv("TSLIB_TSDEVICE", QByteArray("/dev/input/event3"));
+    qputenv("TSLIB_TSDEVICE", QByteArray("/dev/input/event4"));
     qunsetenv("QT_QPA_GENERIC_PLUGINS");  // 避免两套输入栈同时启用
 
     // —— Qt 插件路径（确保能找到 libqsqlite.so）—— //
@@ -82,6 +86,7 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<MotorController>("Motor", 1, 0, "MotorController");
     qmlRegisterType<ProjectsViewModel>("App", 1, 0, "ProjectsViewModel");
     qmlRegisterType<SeriesFeeder>("App", 1, 0, "SeriesFeeder");
+    qmlRegisterType<QrScanner>("App", 1, 0, "QrScanner");
     qmlRegisterType<MyLineSeries>(
         "App",          // QML 模块名
         1, 0,           // 版本号
@@ -157,7 +162,9 @@ int main(int argc, char* argv[]) {
     // ================= 打印机初始化 =================
     PrinterManager& printer = PrinterManager::instance();
     printer.initPrinter();
-
+    //==================识别=======================
+    QrScanner qrScanner;
+    //  QrScanner* qrScanner = new QrScanner();
     // ================= QSS 样式 =================
     QFile qss(":/styles/main.qss");
     if (qss.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -175,7 +182,19 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("projectsVm", &projectsVm);
     engine.rootContext()->setContextProperty("historyVm", &historyVm);
     engine.rootContext()->setContextProperty("keys", &keysProxy);
-    const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
+    engine.rootContext()->setContextProperty("qrScanner", &qrScanner);
+    engine.addImageProvider("qr", new QrImageProvider(&qrScanner));
+    const QUrl url(QStringLiteral(
+
+        "qrc:/qml/main.qml"));
+    QObject::connect(&qrScanner, &QrScanner::qrDecoded,
+                     [&](const QString& text) {
+                         qInfo() << "[QR-DECODED] 扫描到二维码内容:" << text;
+
+                         // === 自动打印 ===
+                         //  PrinterManager& printer = PrinterManager::instance();
+                         //  printer.printText("二维码内容: " + text);
+                     });
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreated, &app,
         [url](QObject* obj, const QUrl& objUrl) {

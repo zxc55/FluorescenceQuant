@@ -267,11 +267,7 @@ function startTest() {
                 uvadcList = mainViewModel.getAdcData(tfSampleId.text)
                 var res = mainViewModel.calcTC(uvadcList)          // 调用 C++ 函数
 
-                // console.log("hasT =", res.hasT,          // 是否有 T 线
-                // "areaT =", res.areaT,        // T 线面积
-                // "hasC =", res.hasC,          // 是否有 C 线
-                // "areaC =", res.areaC,        // C 线面积
-                // "ratioTC =", res.ratioTC)    // T/C 比值
+            
                 // === 读取界面输入信息 ===
                 var sampleNo = tfSampleId.text          // 样品编号
                 var projectId = projectPage.selectedId       
@@ -280,9 +276,9 @@ function startTest() {
                 var name     = tfSampleName.text        // 样品名称
                 var batch    = projectsVm.getBatchById(projectPage.selectedId) // 批次编码
                 var curve    = standardCurveBox.currentText  // 标准曲线
-                var conc     = 0                        // 检测浓度（暂时为 0）
+                var conc     = res.concentration                        // 检测浓度
                 var ref      = parseFloat(refValueField.text || 0)  // 参考值
-                var result   = "未测"                   // 检测结果
+                var result   = res.resultStr                  // 检测结果
                 var time     = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss") // 时间
                 var unit     = tfLab.text               // 检测单位
                 var person   = tfOperator.text          // 检测人
@@ -839,6 +835,10 @@ function startTest() {
                                 Item { Layout.fillWidth: true }
                                 Button { text: "刷新"; onClicked: projectsVm.refresh() }
                                 Button {
+                                            text: "扫描二维码"
+                                            onClicked: scanPage.visible = true
+                                           }
+                                Button {
                                     text: "删除"
                                     enabled: projectPage.selectedId > 0
                                     onClicked: {
@@ -1195,7 +1195,7 @@ function startTest() {
                                 RowLayout {
                                     spacing: 10
                                     Button { text: "刷新"; onClicked: historyVm.refresh() }
-                                    
+
                                     Button {
                                         text: "全选"
                                         onClicked: {
@@ -1752,7 +1752,11 @@ Timer {
         }
     }
 }
-
+CameraScannerPage {
+    id: scanPage
+    visible: false
+    anchors.fill: parent
+}
 
 }
  

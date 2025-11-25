@@ -82,10 +82,6 @@ Item {
             right: parent.right
             bottom: parent.bottom
         }
-
-     //   antialiasing: true
-      //  legend.visible: true
-
         // X 轴
         ValueAxis {
             id: axisX
@@ -115,47 +111,8 @@ Item {
         }
         SeriesFeeder {
             id: feeder
-            series: dummyCurve
-
-            //  onChunkDone: console.log("CHUNK", index, "SIZE", size, "ELAPSED_MS", elapsedMs)
-            // onFinished: {
-            //     //console.log("FEEDER_FINISHED");
-            //     root.loaded();
-            // }
-            //  onError: console.warn(message)
-        }
-
-        // Component.onCompleted: {
-        //     var t0 = Date.now();
-        //     console.log("QML_COMPONENT_COMPLETED_MS:", t0);
-        //     if (CHUNK > 0) {
-        //         feeder.buildAndAppendChunked(N, CHUNK);
-        //     } else {
-        //       //  feeder.buildAndReplace(N);
-        //     }
-        // }
-        // 最大值点
-        // ScatterSeries {
-        //     id: maxPoint
-        //     name: "最大值"
-        //     markerSize: 10
-        //     color: "red"
-        //     borderColor: "darkred"
-        //     axisX: axisX
-        //     axisY: axisY
-        // }
-
-        // // 最小值点
-        // ScatterSeries {
-        //     id: minPoint
-        //     name: "最小值"
-        //     markerSize: 10
-        //     color: "blue"
-        //     borderColor: "darkblue"
-        //     axisX: axisX
-        //     axisY: axisY
-        // }
-
+            series: dummyCurve       
+        }      
         backgroundColor: "#ffffff"
         plotAreaColor: "#ffffff"
     }

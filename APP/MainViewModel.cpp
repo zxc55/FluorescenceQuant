@@ -12,7 +12,49 @@
 #include <thread>
 
 #include "IIODeviceController.h"
-#define PEAK_NEIGHBOR_COUNT 5
+#define PEAK_NEIGHBOR 3
+MainViewModel::FourPLParams stdCurve;
+static double fourPL_inverse(double y, const MainViewModel::FourPLParams& p) {
+    const double eps = 1e-9;
+
+    // double A = p.A;
+    // double B = p.B;
+    // double C = p.C;
+    // double D = p.D;
+
+    double A = 3.091684;
+    double B = 1.197694;
+    double C = 217.316723;
+    double D = 0.076063;
+
+    // 防止 B=0 或 C<=0
+    if (C <= 0 || std::fabs(B) < eps)
+        return 0;
+
+    // clamp y
+    double y_min = std::min(A, D) + eps;
+    double y_max = std::max(A, D) - eps;
+
+    if (y < y_min)
+        y = y_min;
+    if (y > y_max)
+        y = y_max;
+
+    double denom = (y - D);
+    if (std::fabs(denom) < eps)
+        return 1e9;  // 太接近 D，浓度无限大
+
+    double ratio = (A - D) / denom - 1.0;
+    if (ratio <= 0)
+        return 0;
+
+    double t = std::pow(ratio, 1.0 / B);
+
+    double x = C * t;
+    if (x < 0)
+        x = 0;
+    return x;
+}
 class ScopedTimer {
 public:
     explicit ScopedTimer(const QString& tag)
@@ -249,25 +291,26 @@ QVariantList MainViewModel::getAdcData(const QString& sampleNo) {
     qInfo() << "[MainViewModel] 曲线点数=" << result.size();
     return result;
 }
+
 static double avgPeak(const QVector<double>& y, int idx) {
     int n = y.size();
     double sum = 0;
-    int count = 0;
-
-    for (int k = -PEAK_NEIGHBOR_COUNT; k <= PEAK_NEIGHBOR_COUNT; ++k) {
+    int cnt = 0;
+    for (int k = -PEAK_NEIGHBOR; k <= PEAK_NEIGHBOR; k++) {
         int p = idx + k;
         if (p >= 0 && p < n) {
             sum += y[p];
-            count++;
+            cnt++;
         }
     }
-    return (count > 0 ? sum / count : 0.0);
+    return cnt ? sum / cnt : 0;
 }
+
 QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
     QVariantMap r;
 
     int n = adcList.size();
-    if (n < 1500) {  // 数据太短：不可能出现 C/T 峰
+    if (n < 1500) {
         qWarning() << "[calcTC] curve too short, n=" << n;
         return r;
     }
@@ -279,153 +322,142 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
     for (int i = 0; i < n; ++i)
         y[i] = adcList[i].toDouble();
 
-    // ============================================================
-    // 2) 找 C 峰：从 index >= 666 区间找最大值
-    // ============================================================
-    int idxC = -1;
-    double maxC = -1;
+    // ======================================================================
+    // 2) 固定区间找峰（先 C → 后 T）
+    // ======================================================================
+    int CL = 700, CR = 1200;   // C 区
+    int TL = 1350, TR = 1700;  // T 区
 
-    for (int i = 666; i < n; ++i) {
+    if (CR >= n)
+        CR = n - 1;
+    if (TR >= n)
+        TR = n - 1;
+
+    // ---- 找 C 峰 ----
+    int idxC = CL;
+    double maxC = y[CL];
+    for (int i = CL; i <= CR; ++i) {
         if (y[i] > maxC) {
             maxC = y[i];
             idxC = i;
         }
     }
 
-    if (idxC < 0) {
-        qWarning() << "[calcTC] ERROR: cannot find C peak!";
-        return r;
-    }
-
-    // ============================================================
-    // 3) 找 T 峰：从 index >= 1250 区间找最大值
-    // ============================================================
-    int idxT = -1;
-    double maxT = -1;
-
-    for (int i = 1250; i < n; ++i) {
+    // ---- 找 T 峰 ----
+    int idxT = TL;
+    double maxT = y[TL];
+    for (int i = TL; i <= TR; ++i) {
         if (y[i] > maxT) {
             maxT = y[i];
             idxT = i;
         }
     }
 
-    if (idxT < 0) {
-        qWarning() << "[calcTC] ERROR: cannot find T peak!";
-        return r;
-    }
-
-    // ============================================================
-    // 4) 峰值计算：7 点平均
-    // ============================================================
+    // ---- 峰值 7 点平均 ----
     double C_raw = avgPeak(y, idxC);
     double T_raw = avgPeak(y, idxT);
 
-    // ============================================================
-    // 5) 初步 baseline 用于判断 T 是否存在
-    //    baseline_est = C~T 区间最小值
-    // ============================================================
+    // ======================================================================
+    // 3) 初步 baseline 判断 T 是否存在
+    // ======================================================================
     int a0 = qMin(idxC, idxT);
     int b0 = qMax(idxC, idxT);
 
     double baseline_est = y[a0];
-    for (int i = a0; i <= b0; ++i)
-        if (y[i] < baseline_est)
-            baseline_est = y[i];
+    for (int i = a0; i <= b0; i++)
+        baseline_est = std::min(baseline_est, y[i]);
 
-    // 初步判断 T 是否存在
     double T_net_est = T_raw - baseline_est;
 
-    bool hasT = true;
-    bool hasC = true;
+    // ---- 阴性卡自动识别 ----
+    bool hasT = (T_net_est >= 0.01);  // 阈值可调
 
-    const double T_THRESHOLD = 0.01;  // 阴性判定阈值（你机器噪声 < 0.01）
-
-    if (T_net_est < T_THRESHOLD)
-        hasT = false;  // 阴性卡！
-
-    // ============================================================
-    // 6) 最终 baseline
-    // ============================================================
-
+    // ======================================================================
+    // 4) 最终 baseline
+    // ======================================================================
     double baseline = 0;
 
     if (hasT) {
-        // -----------------------
-        // 阳性卡：用 C~T 区间最小值
-        // -----------------------
         baseline = y[a0];
-        for (int i = a0; i <= b0; ++i)
-            if (y[i] < baseline)
-                baseline = y[i];
+        for (int i = a0; i <= b0; i++)
+            baseline = std::min(baseline, y[i]);
     } else {
-        // -----------------------
-        // 阴性卡：只用背景区 baseline（更稳定）
-        // 因为 T 不存在，无需 C~T baseline
-        // -----------------------
         int L = 800, R = 950;
-        if (L < 0)
-            L = 0;
         if (R >= n)
             R = n - 1;
 
         baseline = y[L];
-        for (int i = L; i <= R; ++i)
-            if (y[i] < baseline)
-                baseline = y[i];
+        for (int i = L; i <= R; i++)
+            baseline = std::min(baseline, y[i]);
     }
 
-    // ============================================================
-    // 7) 最终净峰值
-    // ============================================================
+    // ======================================================================
+    // 5) 扣除本底
+    // ======================================================================
     double C_net = C_raw - baseline;
-    double T_net = hasT ? (T_raw - baseline) : 0;  // 阴性卡 T_net=0
+    double T_net = hasT ? (T_raw - baseline) : 0;
 
     if (C_net < 0)
         C_net = 0;
     if (T_net < 0)
         T_net = 0;
 
-    // ============================================================
-    // 8) T/C 比值
-    // ============================================================
+    // ======================================================================
+    // 6) 计算 T/C（竞争法）
+    // ======================================================================
     double ratio = 0;
-    if (hasT && C_net > 0)
+    if (C_net > 0)
         ratio = T_net / C_net;
-    else
-        ratio = 0;  // 阴性卡 T/C=0
 
-    // ============================================================
-    // 9) 输出结果
-    // ============================================================
+    // ======================================================================
+    // 7) 四参数浓度
+    // ======================================================================
+    double concentration = fourPL_inverse(ratio, stdCurve);
+
+    // ======================================================================
+    // 8) ★★★ 只有两个结果：阳性 / 阴性 ★★★
+    // ======================================================================
+    const double CUTOFF = 0.20;  // ← 竞争法典型阈值
+
+    QString resultStr;
+    if (ratio < CUTOFF)
+        resultStr = "阳性";
+    else
+        resultStr = "阴性";
+
+    // ======================================================================
+    // 9) 输出到 QML
+    // ======================================================================
     r["idxC"] = idxC;
     r["idxT"] = idxT;
-
-    r["hasC"] = hasC;
     r["hasT"] = hasT;
 
-    r["baseline"] = baseline;
     r["C_raw"] = C_raw;
     r["T_raw"] = T_raw;
+    r["baseline"] = baseline;
 
     r["C_net"] = C_net;
     r["T_net"] = T_net;
-    r["ratioTC"] = ratio;
 
-    // debug 输出
+    r["ratioTC"] = ratio;
+    r["concentration"] = concentration;
+    r["resultStr"] = resultStr;
+
+    // 日志
     qInfo() << "[calcTC]"
-            << "idxC=" << idxC
-            << "idxT=" << idxT
-            << "hasT=" << hasT
-            << "baseline=" << baseline
-            << "C_raw=" << C_raw
-            << "T_raw=" << T_raw
-            << "C_net=" << C_net
-            << "T_net=" << T_net
-            << "ratio=" << ratio;
+            << " idxC=" << idxC
+            << " idxT=" << idxT
+            << " hasT=" << hasT
+            << " baseline=" << baseline
+            << " C_net=" << C_net
+            << " T_net=" << T_net
+            << " ratio=" << ratio
+            << " conc=" << concentration
+            << " resultStr=" << resultStr;
 
     return r;
 }
+
 QVariantMap MainViewModel::calcTC_FixedWindow(const QVariantList& adcList) {
     QVariantMap result;
     result["hasT"] = false;
