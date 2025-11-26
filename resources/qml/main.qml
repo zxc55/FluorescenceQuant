@@ -558,7 +558,7 @@ function startTest() {
                     // ===== 0 样品检测 ===== 
                     Item {
                         id: sampleTestPage
-                        anchors.fill: parent
+                        Layout.fillWidth: true
 
                         Column {
                             anchors.fill: parent
@@ -1105,7 +1105,7 @@ function startTest() {
                     // ===== 2 历史记录页（带选中删除）=====
                     Item {
                         id: historyPage
-                        anchors.fill: parent
+                       Layout.fillWidth: true
 
                         // 列宽 & 行高
                         property int rowHeight: 44
@@ -1393,8 +1393,214 @@ function startTest() {
                         }
 
                     }
+                    // ===== 3 系统设置页 =====
+                    Item {
+                        id: systemPage
+                        property int sysIndex: 0       // 当前子页面
+                        anchors.fill: parent
+
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 16
+
+                            // ===== 顶部标题 =====
+                            Row {
+                                width: parent.width
+                                height: 40
+                                spacing: 12
+
+                                Label {
+                                    text: "系统设置"
+                                    font.pixelSize: 24
+                                    font.bold: true
+                                    color: "#1f2937"
+                                }
+
+                                Item { width: 10; height: 10; Layout.fillWidth: true }
+                            }
+
+                            // ===== 顶部按钮栏 =====
+                            Row {
+                                width: parent.width
+                                height: 50
+                                spacing: 12
+
+                                // 通用按钮组件
+                                Component {
+                                    id: sysBtnComp
+                                    Rectangle {
+                                        id: btn
+                                        width: 140
+                                        height: 44
+                                        radius: 10
+                                        border.width: 1
+                                        border.color: checked ? "#2b5fd8" : "#cfd6e2"
+                                        color: checked ? "#4c86ff" : "#f5f6fa"
+
+                                        property alias text: lbl.text
+                                        property int idx: 0
+                                        property bool checked: systemPage.sysIndex === idx
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: systemPage.sysIndex = btn.idx
+                                        }
+
+                                        Text {
+                                            id: lbl
+                                            anchors.centerIn: parent
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                            color: btn.checked ? "white" : "#374151"
+                                        }
+                                    }
+                                }
+
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "功能设置"; item.idx = 0 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "工具";     item.idx = 1 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "厂家信息"; item.idx = 2 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "关于仪器"; item.idx = 3 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "恢复出厂"; item.idx = 4 } }
+                            }
+
+                            // ===== 内容区域 =====
+                            Rectangle {
+                                id: sysContent
+                                width: parent.width
+                                height: parent.height - 120
+                                radius: 12
+                                color: "#ffffff"
+                                border.color: "#d1d5db"
+                                border.width: 1
+
+                                StackLayout {
+                                    id: sysStack
+                                    anchors.fill: parent
+                                    currentIndex: systemPage.sysIndex
+
+                                    // 0️⃣ 功能设置
+                                    Item {
+                                        id: funcPage
+                                        Layout.fillWidth: true
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 20
+                                            spacing: 20
+
+                                            Rectangle { width: parent.width; height: 1; color: "#e5e7eb" }
+
+                                            // === 通用开关组件 ===
+                                            Component {
+                                                id: switchRowComp
+
+                                                Row {
+                                                    width: funcPage.width - 40
+                                                    height: 50
+                                                    spacing: 20
+
+                                                    Label {
+                                                        id: lbl
+                                                        text: qsTr("未命名")
+                                                        width: parent.width - 120
+                                                        font.pixelSize: 20
+                                                        color: "#1f2937"
+                                                        verticalAlignment: Text.AlignVCenter
+                                                    }
+
+                                                    Switch {
+                                                        id: sw
+                                                        width: 70
+                                                        height: 38
+                                                        checked: false
+                                                        onToggled: {
+                                                            console.log("功能设置:", lbl.text, "=", sw.checked)
+                                                        }
+
+                                                        indicator: Rectangle {
+                                                            implicitWidth: 70
+                                                            implicitHeight: 38
+                                                            radius: 19
+                                                            color: sw.checked ? "#4c86ff" : "#d1d5db"
+                                                            border.color: sw.checked ? "#3a6ae8" : "#c0c0c0"
+
+                                                            Rectangle {
+                                                                width: 32
+                                                                height: 32
+                                                                radius: 16
+                                                                y: 3
+                                                                x: sw.checked ? (70 - 35) : 3
+                                                                color: "white"
+                                                                border.color: "#a1a1aa"
+                                                                Behavior on x { NumberAnimation { duration: 120 } }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // === 开关项列表 ===
+                                            Column {
+                                                spacing: 18
+
+                                                Loader { sourceComponent: switchRowComp; onLoaded: item.children[0].text = "启动自动打印" }
+                                                Loader { sourceComponent: switchRowComp; onLoaded: item.children[0].text = "ID号自动生成" }
+                                                Loader { sourceComponent: switchRowComp; onLoaded: item.children[0].text = "启动数据自动上传服务器" }
+                                                Loader { sourceComponent: switchRowComp; onLoaded: item.children[0].text = "启用微动开关" }
+                                                Loader { sourceComponent: switchRowComp; onLoaded: item.children[0].text = "厂家名称打印" }
+                                            }
+                                        }
+                                    }
+
+                                    // 1️⃣ 工具
+                                    Item {
+                                        Label {
+                                            text: "工具页（待填）"
+                                            anchors.centerIn: parent
+                                            font.pixelSize: 22
+                                            color: "#6b7280"
+                                        }
+                                    }
+
+                                    // 2️⃣ 厂家信息
+                                    Item {
+                                        Label {
+                                            text: "厂家信息（待填）"
+                                            anchors.centerIn: parent
+                                            font.pixelSize: 22
+                                            color: "#6b7280"
+                                        }
+                                    }
+
+                                    // 3️⃣ 关于仪器
+                                    Item {
+                                        Label {
+                                            text: "关于仪器（待填）"
+                                            anchors.centerIn: parent
+                                            font.pixelSize: 22
+                                            color: "#6b7280"
+                                        }
+                                    }
+
+                                    // 4️⃣ 恢复出厂
+                                    Item {
+                                        Label {
+                                            text: "恢复出厂（待填）"
+                                            anchors.centerIn: parent
+                                            font.pixelSize: 22
+                                            color: "red"
+                                            font.bold: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                  }
-            }///
+
+
+             }
                     Item {
                                 id: detailPage
                                 anchors {
