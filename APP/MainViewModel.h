@@ -33,6 +33,7 @@ public slots:
     void setCurrentSample(const QString& sampleNo);
     Q_INVOKABLE QVariantList getAdcDataBySample(const QString& sampleNo);
     Q_INVOKABLE QVariantList getAdcData(const QString& sampleNo);
+    Q_INVOKABLE QString generateSampleNo();
 
 signals:
     void newDataBatch(const QVector<double>& values);

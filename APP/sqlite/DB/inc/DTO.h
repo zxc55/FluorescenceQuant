@@ -2,18 +2,28 @@
 #include <QMetaType>
 #include <QString>
 
-// 系统设置（单行表 app_settings）
+// 系统设置表 app_settings 对应行
 struct AppSettingsRow {
-    int id = 1;  // 永远用 id=1 的单行配置
-    QString manufacturer;
-    bool engineerMode = false;
-    bool autoPrint = true;
-    int backlight = 80;  // 0~100
-    QString lang = QStringLiteral("zh_CN");
-    QString updatedAt;  // 由数据库触发器/代码维护
-};
-Q_DECLARE_METATYPE(AppSettingsRow)
+    int id = 1;  // 固定为 1
 
+    QString manufacturer;       // 厂家名称
+    bool engineerMode = false;  // 工程师模式
+
+    bool autoPrint = false;          // 启动自动打印
+    bool autoUpload = false;         // 启动自动上传服务器
+    bool autoIdGen = false;          // ID号自动生成
+    bool microSwitch = false;        // 微动开关
+    bool manufacturerPrint = false;  // ★ 厂家名称是否打印（你的 QML、ViewModel 正在使用这个字段）
+
+    int backlight = 80;                      // 背光 (0~100)
+    QString lang = QStringLiteral("zh_CN");  // 语言
+
+    QString updatedAt;  // 更新时间（数据库维护）
+    QString lastSampleDate;
+    int lastSampleIndex = 0;
+};
+
+Q_DECLARE_METATYPE(AppSettingsRow)
 // 用户表（users）
 struct UserRow {
     int id;

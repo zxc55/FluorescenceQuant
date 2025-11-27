@@ -15,6 +15,12 @@ static bool execOne(QSqlQuery& q, const QString& sql) {
     return true;
 }
 
+// 执行 SQL（忽略错误，用于 ADD COLUMN）
+static bool execIgnore(QSqlQuery& q, const QString& sql) {
+    q.exec(sql);
+    return true;
+}
+
 // =========================
 //  project_info 结构修复
 // =========================
@@ -39,7 +45,6 @@ static bool migrateProjectInfo(QSqlDatabase& db) {
         }
     }
 
-    // 如果 projectName 缺失 或 batchCode 默认值错误 → 需要重建表
     needMigrate = (!hasProjectName || batchDefaultWrong);
 
     if (!needMigrate) {
@@ -52,7 +57,7 @@ static bool migrateProjectInfo(QSqlDatabase& db) {
     // 1) 旧表改名
     execOne(q, "ALTER TABLE project_info RENAME TO project_info_old;");
 
-    // 2) 新建 project_info（最终版本结构）
+    // 2) 创建新表
     execOne(q, R"SQL(
 CREATE TABLE project_info(
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +79,7 @@ CREATE TABLE project_info(
 );
 )SQL");
 
-    // 3) 迁移旧表数据（旧表没有 projectName 字段）
+    // 3) 迁移旧表数据
     execOne(q, R"SQL(
 INSERT INTO project_info(
     id, projectId, sampleNo, sampleSource, sampleName, standardCurve,
@@ -114,13 +119,28 @@ CREATE TABLE IF NOT EXISTS app_settings(
     backlight           INTEGER NOT NULL DEFAULT 50,
     language            TEXT    NOT NULL DEFAULT 'zh_CN',
     auto_update         INTEGER NOT NULL DEFAULT 0,
-    engineer_mode       INTEGER NOT NULL DEFAULT 0
+    engineer_mode       INTEGER NOT NULL DEFAULT 0,
+
+    -- === 功能设置（旧字段） ===
+    auto_print          INTEGER NOT NULL DEFAULT 0,
+    auto_upload         INTEGER NOT NULL DEFAULT 0,
+    auto_id_gen         INTEGER NOT NULL DEFAULT 0,
+    micro_switch        INTEGER NOT NULL DEFAULT 0,
+    manufacturer_print  INTEGER NOT NULL DEFAULT 0,
+        -- 新增字段（编号持久化）
+    last_sample_date    TEXT NOT NULL DEFAULT '',
+    last_sample_index   INTEGER NOT NULL DEFAULT 0
 );
 )SQL");
 
     execOne(q, R"SQL(
 INSERT OR IGNORE INTO app_settings(id, manufacturer_name)
 VALUES(1, '');
+)SQL");
+
+    // ★★★★★ 新增字段 auto_id_gen（如果存在则忽略） ★★★★★
+    execIgnore(q, R"SQL(
+ALTER TABLE app_settings ADD COLUMN auto_id_gen INTEGER NOT NULL DEFAULT 0;
 )SQL");
 
     // ===== users =====
@@ -170,7 +190,7 @@ SELECT '玉米赤霉烯酮','B2025-003',datetime('now','localtime')
 WHERE (SELECT COUNT(1) FROM projects)=2;
 )SQL");
 
-    // ===== project_info（创建新版结构，如果是旧结构则 migration 修复）=====
+    // ===== project_info =====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS project_info(
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -192,7 +212,6 @@ CREATE TABLE IF NOT EXISTS project_info(
 );
 )SQL");
 
-    // ===== 修复旧结构 =====
     migrateProjectInfo(db);
 
     // ===== adc_data =====
