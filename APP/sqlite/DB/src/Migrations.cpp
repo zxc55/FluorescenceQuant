@@ -138,10 +138,10 @@ INSERT OR IGNORE INTO app_settings(id, manufacturer_name)
 VALUES(1, '');
 )SQL");
 
-    // ★★★★★ 新增字段 auto_id_gen（如果存在则忽略） ★★★★★
-    execIgnore(q, R"SQL(
-ALTER TABLE app_settings ADD COLUMN auto_id_gen INTEGER NOT NULL DEFAULT 0;
-)SQL");
+    //     // ★★★★★ 新增字段 auto_id_gen（如果存在则忽略） ★★★★★
+    //     execIgnore(q, R"SQL(
+    // ALTER TABLE app_settings ADD COLUMN auto_id_gen INTEGER NOT NULL DEFAULT 0;
+    // )SQL");
 
     // ===== users =====
     execOne(q, R"SQL(
@@ -226,5 +226,6 @@ CREATE TABLE IF NOT EXISTS adc_data(
 )SQL");
 
     qInfo() << "[MIGRATE] v1 done ✅";
+
     return true;
 }

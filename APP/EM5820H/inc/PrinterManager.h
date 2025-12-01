@@ -4,6 +4,10 @@
 #include <QObject>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <queue>
 #include <thread>
 
 #include "printer_lib.h"
@@ -19,6 +23,9 @@ public:
     void testText();
     bool initPrinter();
     static PrinterManager& instance();
+    void postPrint(const std::function<void()>& job);
+    printer_t* printer;  // 打印机对象指针
+    const printer_t* getPrinter() const { return printer; }
 
 private:
     PrinterManager();
@@ -39,9 +46,26 @@ private:
     void deinitPrinter();
 
 private:
-    const printer_t* printer;   // 打印机对象指针
     std::thread worker;         // 后台线程
     std::atomic<bool> running;  // 线程运行标志
+    std::queue<std::function<void()>> queue_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
 };
-
+struct PrintData {
+    QString projectName;     // 项目名称
+    QString sampleNo;        // 样品编号
+    QString sampleSource;    // 样品来源
+    QString sampleName;      // 样品名称
+    QString standardCurve;   // 标准曲线
+    QString batchCode;       // 批次编码
+    double detectedConc;     // 检测浓度
+    double referenceValue;   // 参考值
+    QString result;          // 检测结果（合格/不合格）
+    QString detectedTime;    // 检测时间
+    QString detectedUnit;    // 单位
+    QString detectedPerson;  // 检测人
+    QString dilutionInfo;    // 稀释倍数
+};
+Q_DECLARE_METATYPE(PrintData)
 #endif  // PRINTERMANAGER_H

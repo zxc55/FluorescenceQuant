@@ -129,7 +129,6 @@ void PrinterManager::testText() {
     //     ->align(ALIGN_RIGHT)
     //     ->set("https://www.bilibili.com/", 5, QR_ECC_H)
     //     ->print();
-    qDebug() << "printer 22222" << printer;
 }
 
 // ---------------- 打印二维码 ----------------
@@ -160,16 +159,40 @@ void PrinterManager::deinitPrinter() {
 
 // ---------------- 主线程逻辑 ----------------
 void PrinterManager::run() {
-    // if (!initPrinter())
-    //     return;
+    qDebug() << "[PrinterManager] run() started. printer=" << printer;
 
-    setupListeners();
-    testSettings();
-    // testText();
-    testQRCode();
-    // testText();
-    qDebug() << "printer1111 " << printer;
     while (running.load()) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::function<void()> job;
+
+        // 等待信号
+        {
+            std::unique_lock<std::mutex> lk(mutex_);
+            cv_.wait(lk, [&] {
+                return !queue_.empty() || !running.load();
+            });
+
+            if (!running.load())
+                break;
+
+            job = queue_.front();
+            queue_.pop();
+        }
+
+        // 执行打印任务
+        if (job) {
+            qDebug() << "[PrinterManager] executing print job...";
+            job();  // 调用打印 lambda
+            qDebug() << "[PrinterManager] print job done.";
+        }
     }
+
+    qDebug() << "[PrinterManager] run() stopped.";
+}
+
+void PrinterManager::postPrint(const std::function<void()>& job) {
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        queue_.push(job);
+    }
+    cv_.notify_one();  // 唤醒线程执行打印
 }

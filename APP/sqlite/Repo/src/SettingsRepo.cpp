@@ -54,7 +54,7 @@ bool SettingsRepo::updateOne(QSqlDatabase& db, const AppSettingsRow& s) {
         "last_sample_index=? "
         "WHERE id=1;");
 
-    q.addBindValue(s.manufacturer);
+    q.addBindValue(s.manufacturer.isEmpty() ? "" : s.manufacturer);
     q.addBindValue(s.backlight);
     q.addBindValue(s.lang);
     q.addBindValue(0);  // auto_update 暂用固定值，可改

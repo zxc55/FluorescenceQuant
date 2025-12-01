@@ -86,7 +86,9 @@ bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data) {
     q.addBindValue(data.value("batchCode"));
     q.addBindValue(data.value("detectedConc"));
     q.addBindValue(data.value("referenceValue"));
+
     q.addBindValue(data.value("result"));
+
     q.addBindValue(data.value("detectedTime"));
     q.addBindValue(data.value("detectedUnit"));
     q.addBindValue(data.value("detectedPerson"));

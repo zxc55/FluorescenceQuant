@@ -27,7 +27,7 @@
 #include "MotorController.h"
 #include "PrinterManager.h"
 #include "V4L2MjpegGrabber.h"
-
+#include "printerDeviceController.h"
 // SQLite 组件
 #include "DBWorker.h"
 #include "DTO.h"
@@ -95,6 +95,7 @@ int main(int argc, char* argv[]) {
     qRegisterMetaType<QVariantList>("QVariantList");
     qRegisterMetaType<HistoryRow>("HistoryRow");
     qRegisterMetaType<QVector<HistoryRow>>("QVector<HistoryRow>");
+    qRegisterMetaType<PrintData>("PrintData");
 
     // ======================
     // 注册 QML 类型
@@ -147,7 +148,7 @@ int main(int argc, char* argv[]) {
     UserViewModel userVm;
     ProjectsViewModel projectsVm(db);
     HistoryViewModel historyVm(db);
-
+    PrinterDeviceController printerCtrl;
     // ==== 绑定 DB ====
     settingsVm.bindWorker(db);
     userVm.bindWorker(db);
@@ -164,7 +165,7 @@ int main(int argc, char* argv[]) {
     // 打印机
     // ======================
     PrinterManager::instance().initPrinter();
-
+    printerCtrl.start();
     // ======================
     // QrScanner
     // ======================
@@ -190,7 +191,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("historyVm", &historyVm);
     engine.rootContext()->setContextProperty("keys", &keysProxy);
     engine.rootContext()->setContextProperty("qrScanner", &qrScanner);
-
+    engine.rootContext()->setContextProperty("printerCtrl", &printerCtrl);
     engine.addImageProvider("qr", new QrImageProvider(&qrScanner));
 
     QUrl url(QStringLiteral("qrc:/qml/main.qml"));

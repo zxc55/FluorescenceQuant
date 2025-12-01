@@ -8,6 +8,9 @@ class PrinterDeviceController : public QObject {
     Q_OBJECT
 public:
     explicit PrinterDeviceController(QObject* parent = nullptr);
+    Q_INVOKABLE void printText(const QString& text);
+    Q_INVOKABLE void printRecord(const QVariantMap& record);
+
     void start();
     void stop();
     void test();

@@ -113,7 +113,7 @@ ApplicationWindow {
         color: "#AA000000"    // 半透明黑色遮罩
         z: 999                // 始终覆盖最前面
         visible: true         // 程序启动时显示登录界面
-
+        //登录界面
         Rectangle {
             id: panel_login
             width: 380
@@ -284,9 +284,9 @@ function startTest() {
                 var name     = tfSampleName.text        // 样品名称
                 var batch    = projectsVm.getBatchById(projectPage.selectedId) // 批次编码
                 var curve    = standardCurveBox.currentText  // 标准曲线
-                var conc     = res.concentration                        // 检测浓度
+                var conc     = Number(res.concentration || 0)                        // 检测浓度
                 var ref      = parseFloat(refValueField.text || 0)  // 参考值
-                var result   = res.resultStr                  // 检测结果
+                var result   = res.resultStr || ""                  // 检测结果
                 var time     = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss") // 时间
                 var unit     = tfLab.text               // 检测单位
                 var person   = tfOperator.text          // 检测人
@@ -321,6 +321,11 @@ function startTest() {
                 overlayBusy = false
                 overlayVisible = true
                 testRunning = false
+                if(settingsVm.autoPrint)
+                {
+                   console.log( " 启动打印 ✅" )
+                   printerCtrl.printRecord(record)
+                }
             }
         })
         motorCheck.start()
@@ -419,12 +424,15 @@ function startTest() {
                     height: sideBar.tileH
                     padding: 0
                     onClicked:{ 
+                  if(settingsVm.microSwitch)
+                  {
                    if (!cardInserted) {
                             overlayText = "请检查检测卡位置"
                             overlayBusy = false
                             overlayVisible = true
                             return
                         }
+                  }
 
                         console.log("检测插卡后 → 检查电机原点状态")
                         var val = motor.readRegister(0x34)
@@ -826,7 +834,6 @@ function startTest() {
                             }
                         }
                     }
-
                     // ===== 1 项目管理（带滑动表格） =====
                     Item {
                         id: projectPage
@@ -1114,8 +1121,7 @@ function startTest() {
                                 }
                             }
                         }
-                    }
-                
+                    }         
                     // ===== 2 历史记录页（带选中删除）=====
                     Item {
                         id: historyPage
@@ -1196,13 +1202,13 @@ function startTest() {
                                 Layout.fillWidth: true
                                 spacing: 12
 
-                                Label {
-                                    text: "历史记录"
-                                    font.pixelSize: 24
-                                    font.bold: true
-                                    color: "#111827"
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
+                                // Label {
+                                //     text: "历史记录"
+                                //     font.pixelSize: 24
+                                //     font.bold: true
+                                //     color: "#111827"
+                                //     Layout.alignment: Qt.AlignVCenter
+                                // }
 
                                 Item { Layout.fillWidth: true }  // 左右分隔
 
@@ -1249,6 +1255,22 @@ function startTest() {
                                                 currentPage = 4  // 跳到详细信息页////
                                             } else {
                                                 console.log("⚠️ 请选择一条记录查看详细信息")
+                                            }
+                                        }
+                                    }
+                                    Button {
+                                        text: "打印"
+                                        enabled: historyPage.selectedIds.length === 1    // ★ 只能选中 1 条时启用
+
+                                        onClicked: {
+                                            if (historyPage.selectedIds.length === 1) {
+
+                                                let id = historyPage.selectedIds[0]
+                                                let rec = historyVm.getById(id)      // ⭐ 已经包含全部信息
+                                                printerCtrl.printRecord(rec)       // ⭐ 直接打印，无需 projectId 查询 DB
+                                                console.log("🖨️ 打印记录：项目编号 =", rec.projectId)                                     
+                                            } else {
+                                                console.log("⚠️ 请选择一条记录进行打印")
                                             }
                                         }
                                     }
@@ -1418,23 +1440,6 @@ function startTest() {
                             anchors.fill: parent
                             anchors.margins: 16
                             spacing: 16
-
-                            // ===== 顶部标题 =====
-                            Row {
-                                width: parent.width
-                                height: 40
-                                spacing: 12
-
-                                Label {
-                                    text: "系统设置"
-                                    font.pixelSize: 24
-                                    font.bold: true
-                                    color: "#1f2937"
-                                }
-
-                                Item { width: 10; height: 10; Layout.fillWidth: true }
-                            }
-
                             // ===== 顶部按钮栏 =====
                             Row {
                                 width: parent.width
@@ -1483,7 +1488,7 @@ function startTest() {
                             Rectangle {
                                 id: sysContent
                                 width: parent.width
-                                height: parent.height - 120
+                                height: parent.height -60
                                 radius: 12
                                 color: "#ffffff"
                                 border.color: "#d1d5db"
@@ -1707,19 +1712,73 @@ function startTest() {
                                             anchors.centerIn: parent
                                             font.pixelSize: 22
                                             color: "#6b7280"
-                                        }
+                                              }
                                     }
-
                                     // 2️⃣ 厂家信息
                                     Item {
-                                        Label {
-                                            text: "厂家信息（待填）"
-                                            anchors.centerIn: parent
-                                            font.pixelSize: 22
-                                            color: "#6b7280"
+                                        id: manufacturerInfoPage
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+
+                                        ColumnLayout {
+                                            id: manuCol
+                                            anchors.fill: parent
+                                            spacing: 10
+
+                                            // ===== 标题 =====
+                                            Label {
+                                                text: "厂家信息"
+                                                font.pixelSize: 26
+                                                font.bold: true
+                                                color: "#1f2937"
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+
+                                            // ===== 整个信息大框 =====
+                                            Rectangle {
+                                                id: infoBox
+                                                radius: 12
+                                                color: "#ffffff"
+                                                border.color: "#ffffff"
+                                                border.width: 1
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+                                                Layout.alignment: Qt.AlignHCenter
+
+                                                Column {
+                                                    id: infoContent
+                                                    width: parent.width * 0.9
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                    spacing: 14
+                                                    anchors.margins: 30
+
+
+                                                    // ===== 公司信息 =====
+                                                    Label { text: "公司名称：青岛普瑞邦生物工程有限公司"; font.pixelSize: 20; color: "#111827" }
+                                                    Label { text: "公司地址：山东省青岛市高新区广博路17号 MAX商务红湾21号楼101室"; font.pixelSize: 20; color: "#111827"; wrapMode: Text.Wrap }
+                                                    Label { text: "公司网址：http://www.pribolab.cn/"; font.pixelSize: 20; color: "#111827" }
+                                                    Label { text: "公司邮箱：info@pribolab.cn"; font.pixelSize: 20; color: "#111827" }
+                                                    Label { text: "客服热线：400-688-5349"; font.pixelSize: 20; color: "#111827" }
+
+                                                    // ===== 客户提示文本 =====
+                                                    Text {
+                                                        id: customerText
+                                                        text: 
+                                                            "尊敬的客户朋友，您好！\n\n" +
+                                                            "十分感谢您选择我们的产品，希望您能有一个愉快的使用体验！\n\n" +
+                                                            "如在使用过程中有任何问题、建议和意见，请随时联系我们，我们将在最短的\n\n" +
+                                                            "时间内给您圆满的答复。再次感谢您对我们的支持！"
+                                                        font.pixelSize: 20
+                                                        font.bold: true
+                                                        color: '#090a0b'
+                                                        lineHeight: 0.8
+                                                        lineHeightMode: Text.ProportionalHeight
+                                                        wrapMode: Text.Wrap
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
-
                                     // 3️⃣ 关于仪器
                                     Item {
                                         Label {
@@ -1744,9 +1803,7 @@ function startTest() {
                             }
                         }
                     }
-                 }
-
-
+                           }
              }
                     Item {
                                 id: detailPage
@@ -1948,10 +2005,12 @@ Rectangle {
                 }
                 TextField {
                         id: tfSampleId
-                        text: ""   // 不要默认自动生成
+                       // text: ""   // 不要默认自动生成
                         font.pixelSize: 18
                         placeholderText: "请输入样品编号"
-                        Layout.fillWidth: true
+                        Layout.fillWidth: true                      
+                        text : mainViewModel.generateSampleNo()
+                        
                 }
 
                 Label {
