@@ -19,7 +19,8 @@ enum class DBTaskType {
     LoadHistory,
     InsertHistory,
     DeleteHistory,
-    ExportHistory
+    ExportHistory,
+    InsertProjectInfo
 };
 
 struct DBTask {
@@ -122,6 +123,13 @@ struct DBTask {
         DBTask t;
         t.type = DBTaskType::ExportHistory;
         t.s1 = path;
+        return t;
+    }
+    // —— 项目详情 —— //
+    static DBTask insertProjectInfo(const QVariantMap& m) {
+        DBTask t;
+        t.type = DBTaskType::InsertProjectInfo;
+        t.info = m;  // 使用你已有的 info 字段
         return t;
     }
 };

@@ -129,7 +129,12 @@ CREATE TABLE IF NOT EXISTS app_settings(
     manufacturer_print  INTEGER NOT NULL DEFAULT 0,
         -- 新增字段（编号持久化）
     last_sample_date    TEXT NOT NULL DEFAULT '',
-    last_sample_index   INTEGER NOT NULL DEFAULT 0
+    last_sample_index   INTEGER NOT NULL DEFAULT 0,
+    -- ★★★ 新增：打印字段开关（你需要的 4 个）★★★
+    print_sample_source     INTEGER NOT NULL DEFAULT 0,  -- 打印样品来源
+    print_reference_value   INTEGER NOT NULL DEFAULT 0,  -- 打印参考值
+    print_detected_person   INTEGER NOT NULL DEFAULT 0,  -- 打印检测人员
+    print_dilution_info     INTEGER NOT NULL DEFAULT 0   -- 打印稀释倍数
 );
 )SQL");
 
@@ -137,11 +142,6 @@ CREATE TABLE IF NOT EXISTS app_settings(
 INSERT OR IGNORE INTO app_settings(id, manufacturer_name)
 VALUES(1, '');
 )SQL");
-
-    //     // ★★★★★ 新增字段 auto_id_gen（如果存在则忽略） ★★★★★
-    //     execIgnore(q, R"SQL(
-    // ALTER TABLE app_settings ADD COLUMN auto_id_gen INTEGER NOT NULL DEFAULT 0;
-    // )SQL");
 
     // ===== users =====
     execOne(q, R"SQL(

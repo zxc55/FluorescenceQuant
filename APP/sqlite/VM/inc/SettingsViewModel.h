@@ -21,6 +21,11 @@ public:
     Q_PROPERTY(bool manufacturerPrint READ manufacturerPrint WRITE setManufacturerPrint NOTIFY changed)
     Q_PROPERTY(int backlight READ backlight WRITE setBacklight NOTIFY changed)
     Q_PROPERTY(QString lang READ lang WRITE setLang NOTIFY changed)
+    Q_PROPERTY(bool printSampleSource READ printSampleSource WRITE setPrintSampleSource NOTIFY changed)
+    Q_PROPERTY(bool printReferenceValue READ printReferenceValue WRITE setPrintReferenceValue NOTIFY changed)
+    Q_PROPERTY(bool printDetectedPerson READ printDetectedPerson WRITE setPrintDetectedPerson NOTIFY changed)
+    Q_PROPERTY(bool printDilutionInfo READ printDilutionInfo WRITE setPrintDilutionInfo NOTIFY changed)
+
     // 如果以后要在 QML 控制工程师模式，可以再加：
     // Q_PROPERTY(bool engineerMode READ engineerMode WRITE setEngineerMode NOTIFY changed)
 
@@ -35,6 +40,11 @@ public:
     bool manufacturerPrint() const { return m_data.manufacturerPrint; }
     int backlight() const { return m_data.backlight; }
     QString lang() const { return m_data.lang; }
+    bool printSampleSource() const { return m_data.printSampleSource; }
+    bool printReferenceValue() const { return m_data.printReferenceValue; }
+    bool printDetectedPerson() const { return m_data.printDetectedPerson; }
+    bool printDilutionInfo() const { return m_data.printDilutionInfo; }
+
     // bool engineerMode() const { return m_data.engineerMode; }  // 如果需要
 
     // --- setters ---
@@ -47,7 +57,10 @@ public:
     void setBacklight(int v);
     void setLang(const QString& v);
     void setEngineerMode(bool v);  // ✅ 如果 cpp 有实现，就加这行
-
+    void setPrintSampleSource(bool v);
+    void setPrintReferenceValue(bool v);
+    void setPrintDetectedPerson(bool v);
+    void setPrintDilutionInfo(bool v);
 signals:
     void changed();
 

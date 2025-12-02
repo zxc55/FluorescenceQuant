@@ -43,10 +43,12 @@ public:
     Q_INVOKABLE void postInsertHistory(const HistoryRow& row);
     Q_INVOKABLE void postDeleteHistory(int id);
     Q_INVOKABLE void postExportHistory(const QString& csvPath);
-
+    Q_INVOKABLE void postInsertProjectInfo(const QVariantMap& info);
 signals:
     void ready();
     void errorOccurred(const QString& msg);
+
+    void projectInfoInserted(bool ok);
 
     // === Settings ===
     void settingsLoaded(const AppSettingsRow& row);

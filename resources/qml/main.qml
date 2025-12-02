@@ -48,25 +48,34 @@ ApplicationWindow {
     property bool testRunning: false     // 防止重复检测
     property bool motorMoving: false     // 电机运行标志
     property var originCheckTimer: Timer // 定时器对象引用
-    // ==== 初始化 ====
+    
     Component.onCompleted: {
         VirtualKeyboardSettings.activeLocales = ["en_US", "zh_CN"]
         VirtualKeyboardSettings.locale = "zh_CN"
-
         motor.start()
-        motor.back()
-
-        console.log("【初始化】开始回原点…")
+        
         zeroHomeTimer.start()
+
+        // 👉 延时再执行 motor.back()
+        delayBackTimer.start()
     }
 
+    Timer {
+        id: delayBackTimer
+        interval: 5000  // 延迟 1.5 秒，按需修改1000~3000都可以
+        repeat: false
+        onTriggered: {
+            console.log(">> 延时执行 motor.back()")
+            motor.back()
+        }
+    }
 
     Timer {
         id: zeroHomeTimer
-        interval: 300
+        interval: 3000
         repeat: true
         running: false
-
+       
         onTriggered: {
             var val = motor.readRegister(0x34)
             console.log("🔍 原点状态 0x34 =", val)
@@ -113,6 +122,11 @@ ApplicationWindow {
         color: "#AA000000"    // 半透明黑色遮罩
         z: 999                // 始终覆盖最前面
         visible: true         // 程序启动时显示登录界面
+           // 防止所有点击穿透背景
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {}      // 什么都不做 → 阻断事件
+        }
         //登录界面
         Rectangle {
             id: panel_login
@@ -168,10 +182,38 @@ ApplicationWindow {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         visible: Qt.inputMethod.visible
-        parent: win
+       // parent: win
     }
 
     // 顶部栏
+    // Rectangle {
+    //     id: topBar
+    //     height: 40
+    //     anchors.left: parent.left
+    //     anchors.right: parent.right
+    //     anchors.top: parent.top
+    //     color: "#ffffff"
+    //     border.color: line
+    //     border.width: 1
+
+    //     property date now: new Date()
+    //     Timer { interval: 1000; running: true; repeat: true; onTriggered: topBar.now = new Date() }
+
+    //     RowLayout {
+    //         anchors.fill: parent
+    //         anchors.margins: 12
+    //         spacing: 12
+    //         Rectangle { width: 10; height: 10; radius: 5; color: brand; Layout.alignment: Qt.AlignVCenter }
+    //         Label { text: "青岛普瑞邦生物工程有限公司"; font.pixelSize: 20; color: textMain; Layout.alignment: Qt.AlignVCenter }
+    //         Item { Layout.fillWidth: true }
+    //         Label {
+    //             text: Qt.formatDateTime(topBar.now, "yyyy-MM-dd  HH:mm:ss")
+    //             color: textSub
+    //             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+    //         }
+    //     }
+        
+    // }
     Rectangle {
         id: topBar
         height: 40
@@ -183,15 +225,36 @@ ApplicationWindow {
         border.width: 1
 
         property date now: new Date()
-        Timer { interval: 1000; running: true; repeat: true; onTriggered: topBar.now = new Date() }
+        Timer {
+            interval: 1000
+            running: true
+            repeat: true
+            onTriggered: topBar.now = new Date()
+        }
 
+        // 👍 正确：RowLayout 外层用 anchors，RowLayout 内不再写 anchors
         RowLayout {
-            anchors.fill: parent
-            anchors.margins: 12
+            anchors.fill: parent         // ✔ 外层是普通 Rectangle，可以 anchors
+            anchors.margins: 12          // ✔ 合法
             spacing: 12
-            Rectangle { width: 10; height: 10; radius: 5; color: brand; Layout.alignment: Qt.AlignVCenter }
-            Label { text: "青岛普瑞邦生物工程有限公司"; font.pixelSize: 20; color: textMain; Layout.alignment: Qt.AlignVCenter }
+
+            Rectangle {
+                width: 10
+                height: 10
+                radius: 5
+                color: brand
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            Label {
+                text: "青岛普瑞邦生物工程有限公司"
+                font.pixelSize: 20
+                color: textMain
+                Layout.alignment: Qt.AlignVCenter
+            }
+
             Item { Layout.fillWidth: true }
+
             Label {
                 text: Qt.formatDateTime(topBar.now, "yyyy-MM-dd  HH:mm:ss")
                 color: textSub
@@ -594,7 +657,6 @@ function startTest() {
                                 Item {
                                     width: parent.width
                                     height: parent.height
-
                                     // === 表头 ===
                                     Rectangle {
                                         id: resultHeader
@@ -602,7 +664,6 @@ function startTest() {
                                         height: 44
                                         color: "#e6e8ec"
                                         border.color: "#c0c0c0"
-
                                         Row {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
@@ -613,34 +674,38 @@ function startTest() {
                                                 width: 200
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                anchors.verticalCenter: parent.verticalCenter
                                                 font.bold: true
+                                                padding: 5   // ⭐微调，让中文完全居中
                                             }
+
                                             Label {
                                                 text: "浓度(μg/kg)"
                                                 width: 200
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                anchors.verticalCenter: parent.verticalCenter
                                                 font.bold: true
+                                                padding: 5
                                             }
+
                                             Label {
                                                 text: "结论"
                                                 width: 200
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                anchors.verticalCenter: parent.verticalCenter
                                                 font.bold: true
+                                                padding: 5
                                             }
+
                                             Label {
                                                 text: "参考值(μg/kg)"
                                                 width: 200
-                                                horizontalAlignment: Text.AlignHCenter
+                                                horizontalAlignment: Text.AlignLeft
                                                 verticalAlignment: Text.AlignVCenter
-                                                anchors.verticalCenter: parent.verticalCenter
                                                 font.bold: true
+                                                padding: 5
                                             }
                                         }
+
                                     }
 
                                     // === 内容区 ===
@@ -1500,29 +1565,635 @@ function startTest() {
                                     currentIndex: systemPage.sysIndex
 
                                     // 0️⃣ 功能设置
+                                    // Item {
+                                    //     id: funcPage
+                                    //     Layout.fillWidth: true
+
+                                    //     Column {
+                                    //         anchors.fill: parent
+                                    //         anchors.margins: 20
+                                    //         spacing: 20
+
+                                    //         Rectangle { width: parent.width; height: 1; color: "#e5e7eb" }
+
+                                    //         // === 通用开关组件 ===
+                                    //         Component {
+                                    //             id: switchRowComp
+
+                                    //             Row {
+                                    //                 width: funcPage.width - 40
+                                    //                 height: 50
+                                    //                 spacing: 20
+
+                                    //                 Label {
+                                    //                     id: lbl
+                                    //                     text: qsTr("未命名")
+                                    //                     width: parent.width - 120
+                                    //                     font.pixelSize: 20
+                                    //                     color: "#1f2937"
+                                    //                     verticalAlignment: Text.AlignVCenter
+                                    //                 }
+
+                                    //                 Switch {
+                                    //                     id: sw
+                                    //                     width: 70
+                                    //                     height: 38
+                                    //                     checked: false
+                                    //                     onToggled: {
+                                    //                         console.log("功能设置:", lbl.text, "=", sw.checked)
+                                    //                     }
+
+                                    //                     indicator: Rectangle {
+                                    //                         implicitWidth: 70
+                                    //                         implicitHeight: 38
+                                    //                         radius: 19
+                                    //                         color: sw.checked ? "#4c86ff" : "#d1d5db"
+                                    //                         border.color: sw.checked ? "#3a6ae8" : "#c0c0c0"
+
+                                    //                         Rectangle {
+                                    //                             width: 32
+                                    //                             height: 32
+                                    //                             radius: 16
+                                    //                             y: 3
+                                    //                             x: sw.checked ? (70 - 35) : 3
+                                    //                             color: "white"
+                                    //                             border.color: "#a1a1aa"
+                                    //                             Behavior on x { NumberAnimation { duration: 120 } }
+                                    //                         }
+                                    //                     }
+                                    //                 }
+                                    //             }
+                                    //         }
+
+                                    //         // // === 开关项列表 ===
+                                    //         // Column {
+                                    //         //     spacing: 18
+
+                                    //         //     // ① 启动自动打印
+                                    //         //     Loader {
+                                    //         //         id: loadAutoPrint
+                                    //         //         sourceComponent: switchRowComp
+                                    //         //         onLoaded: {
+                                    //         //                 let row = item
+                                    //         //                 let lbl = row.children[0]
+                                    //         //                 let sw  = row.children[1]
+
+                                    //         //                 lbl.text = "启动自动打印"
+                                    //         //                 sw.checked = Qt.binding(() => settingsVm.autoPrint)
+
+                                    //         //                 sw.onToggled.connect(function() {
+                                    //         //                     settingsVm.autoPrint = sw.checked    // <—— 正确写法
+                                    //         //                     settingsVm.save()
+                                    //         //                 })
+                                                        
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadAutoPrint.item ? loadAutoPrint.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.autoPrint = loadAutoPrint.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }
+
+                                    //         //     // ② ID号自动生成
+                                    //         //     Loader {
+                                    //         //         id: loadAutoId
+                                    //         //         sourceComponent: switchRowComp
+                                    //         //         onLoaded: {
+                                    //         //             let row = item
+                                    //         //             let lbl = row.children[0]
+                                    //         //             let sw  = row.children[1]
+
+                                    //         //             lbl.text = "ID号自动生成"
+                                    //         //             sw.checked = Qt.binding(() => settingsVm.autoIdGen)
+
+                                    //         //             sw.onToggled.connect(function() {
+                                    //         //                 settingsVm.autoIdGen = sw.checked   // <—— 正确写法
+                                    //         //                 settingsVm.save()
+                                    //         //             })
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadAutoId.item ? loadAutoId.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.autoIdGen = loadAutoId.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }
+
+                                    //         //     // ③ 启动数据自动上传服务器
+                                    //         //     Loader {
+                                    //         //         id: loadUpload
+                                    //         //         sourceComponent: switchRowComp
+                                    //         //         onLoaded: {
+                                    //         //                 let row = item
+                                    //         //                 let lbl = row.children[0]
+                                    //         //                 let sw  = row.children[1]
+
+                                    //         //                 lbl.text = "启动数据自动上传服务器"
+                                    //         //                 sw.checked = Qt.binding(() => settingsVm.autoUpload)
+
+                                    //         //                 sw.onToggled.connect(function() {
+                                    //         //                     settingsVm.autoUpload = sw.checked
+                                    //         //                     settingsVm.save()
+                                    //         //                 })
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadUpload.item ? loadUpload.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.autoUpload = loadUpload.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }
+
+                                    //         //     // ④ 启用微动开关
+                                    //         //     Loader {
+                                    //         //         id: loadMicro
+                                    //         //         sourceComponent: switchRowComp
+                                    //         //         onLoaded: {
+                                    //         //             let row = item
+                                    //         //             let lbl = row.children[0]
+                                    //         //             let sw  = row.children[1]
+
+                                    //         //             lbl.text = "启用微动开关"
+                                    //         //             sw.checked = Qt.binding(() => settingsVm.microSwitch)
+
+                                    //         //             sw.onToggled.connect(function() {
+                                    //         //                 settingsVm.microSwitch = sw.checked
+                                    //         //                 settingsVm.save()
+                                    //         //             })
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadMicro.item ? loadMicro.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.microSwitch = loadMicro.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }
+
+                                    //         //     // ⑤ 厂家名称打印
+                                    //         //     Loader {
+                                    //         //         id: loadManu
+                                    //         //         sourceComponent: switchRowComp
+                                    //         //         onLoaded: {
+                                    //         //              let row = item
+                                    //         //              let lbl = row.children[0]
+                                    //         //              let sw  = row.children[1]
+
+                                    //         //              lbl.text = "厂家名称打印"
+                                    //         //              sw.checked = Qt.binding(() => settingsVm.manufacturerPrint)
+
+                                    //         //              sw.onToggled.connect(function() {
+                                    //         //                 settingsVm.manufacturerPrint = sw.checked
+                                    //         //                 settingsVm.save()
+                                    //         //             })
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadManu.item ? loadManu.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.manufacturerPrint = loadManu.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }
+                                    //         //     // ⑥ 打印样品来源
+                                    //         //     Loader {
+                                    //         //         id: loadPrintSrc
+                                    //         //         sourceComponent: switchRowComp
+
+                                    //         //         onLoaded: {
+                                    //         //             let row = item
+                                    //         //             let lbl = row.children[0]
+                                    //         //             let sw  = row.children[1]
+
+                                    //         //             lbl.text = "打印样品来源"
+                                    //         //             sw.checked = Qt.binding(() => settingsVm.printSampleSource)
+
+                                    //         //             sw.onToggled.connect(function() {
+                                    //         //                 settingsVm.printSampleSource = sw.checked
+                                    //         //                 settingsVm.save()
+                                    //         //             })
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadPrintSrc.item ? loadPrintSrc.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.printSampleSource = loadPrintSrc.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }
+
+                                    //         //     // ⑦ 打印参考值
+                                    //         //     Loader {
+                                    //         //         id: loadPrintRef
+                                    //         //         sourceComponent: switchRowComp
+
+                                    //         //         onLoaded: {
+                                    //         //             let row = item
+                                    //         //             let lbl = row.children[0]
+                                    //         //             let sw  = row.children[1]
+
+                                    //         //             lbl.text = "打印参考值"
+                                    //         //             sw.checked = Qt.binding(() => settingsVm.printReferenceValue)
+
+                                    //         //             sw.onToggled.connect(function() {
+                                    //         //                 settingsVm.printReferenceValue = sw.checked
+                                    //         //                 settingsVm.save()
+                                    //         //             })
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadPrintRef.item ? loadPrintRef.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.printReferenceValue = loadPrintRef.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }
+
+                                    //         //     // ⑧ 打印检测人员
+                                    //         //     Loader {
+                                    //         //         id: loadPrintPerson
+                                    //         //         sourceComponent: switchRowComp
+
+                                    //         //         onLoaded: {
+                                    //         //             let row = item
+                                    //         //             let lbl = row.children[0]
+                                    //         //             let sw  = row.children[1]
+
+                                    //         //             lbl.text = "打印检测人员"
+                                    //         //             sw.checked = Qt.binding(() => settingsVm.printDetectedPerson)
+
+                                    //         //             sw.onToggled.connect(function() {
+                                    //         //                 settingsVm.printDetectedPerson = sw.checked
+                                    //         //                 settingsVm.save()
+                                    //         //             })
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadPrintPerson.item ? loadPrintPerson.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.printDetectedPerson = loadPrintPerson.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }
+
+                                    //         //     // ⑨ 打印稀释倍数
+                                    //         //     Loader {
+                                    //         //         id: loadPrintDilution
+                                    //         //         sourceComponent: switchRowComp
+
+                                    //         //         onLoaded: {
+                                    //         //             let row = item
+                                    //         //             let lbl = row.children[0]
+                                    //         //             let sw  = row.children[1]
+
+                                    //         //             lbl.text = "打印稀释倍数"
+                                    //         //             sw.checked = Qt.binding(() => settingsVm.printDilutionInfo)
+
+                                    //         //             sw.onToggled.connect(function() {
+                                    //         //                 settingsVm.printDilutionInfo = sw.checked
+                                    //         //                 settingsVm.save()
+                                    //         //             })
+                                    //         //         }
+
+                                    //         //         Connections {
+                                    //         //             target: loadPrintDilution.item ? loadPrintDilution.item.children[1] : null
+                                    //         //             onToggled: {
+                                    //         //                 settingsVm.printDilutionInfo = loadPrintDilution.item.children[1].checked
+                                    //         //                 settingsVm.save()
+                                    //         //             }
+                                    //         //         }
+                                    //         //     }                                               
+                                    //         // }
+                                    //         // === 外层加 ScrollView，让上面所有 Loader 支持滑动 ===
+                                    //         ScrollView {
+                                    //             id: scrollArea
+                                    //             width: parent.width
+                                    //             height: parent.height
+                                    //             clip: true
+                                    //             ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+                                    //             ScrollBar.vertical.interactive: true
+
+                                    //             Column {
+                                    //                 id: printSettingsColumn
+                                    //                 spacing: 18
+                                    //                 width: parent.width
+
+                                    //                 // ===========================
+                                    //                 // ① 启动自动打印
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadAutoPrint
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "启动自动打印"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.autoPrint)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.autoPrint = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadAutoPrint.item ? loadAutoPrint.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.autoPrint = loadAutoPrint.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //                 // ===========================
+                                    //                 // ② ID号自动生成
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadAutoId
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "ID号自动生成"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.autoIdGen)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.autoIdGen = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadAutoId.item ? loadAutoId.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.autoIdGen = loadAutoId.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //                 // ===========================
+                                    //                 // ③ 启动数据自动上传
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadUpload
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "启动数据自动上传服务器"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.autoUpload)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.autoUpload = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadUpload.item ? loadUpload.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.autoUpload = loadUpload.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //                 // ===========================
+                                    //                 // ④ 微动开关
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadMicro
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "启用微动开关"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.microSwitch)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.microSwitch = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadMicro.item ? loadMicro.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.microSwitch = loadMicro.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //                 // ===========================
+                                    //                 // ⑤ 厂家名称打印
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadManu
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "厂家名称打印"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.manufacturerPrint)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.manufacturerPrint = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadManu.item ? loadManu.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.manufacturerPrint = loadManu.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //                 // ===========================
+                                    //                 // ⑥ 打印样品来源
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadPrintSrc
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "打印样品来源"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.printSampleSource)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.printSampleSource = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadPrintSrc.item ? loadPrintSrc.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.printSampleSource = loadPrintSrc.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //                 // ===========================
+                                    //                 // ⑦ 打印参考值
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadPrintRef
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "打印参考值"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.printReferenceValue)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.printReferenceValue = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadPrintRef.item ? loadPrintRef.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.printReferenceValue = loadPrintRef.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //                 // ===========================
+                                    //                 // ⑧ 打印检测人员
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadPrintPerson
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "打印检测人员"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.printDetectedPerson)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.printDetectedPerson = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadPrintPerson.item ? loadPrintPerson.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.printDetectedPerson = loadPrintPerson.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //                 // ===========================
+                                    //                 // ⑨ 打印稀释倍数
+                                    //                 // ===========================
+                                    //                 Loader {
+                                    //                     id: loadPrintDilution
+                                    //                     sourceComponent: switchRowComp
+
+                                    //                     onLoaded: {
+                                    //                         let row = item
+                                    //                         let lbl = row.children[0]
+                                    //                         let sw  = row.children[1]
+
+                                    //                         lbl.text = "打印稀释倍数"
+                                    //                         sw.checked = Qt.binding(() => settingsVm.printDilutionInfo)
+
+                                    //                         sw.onToggled.connect(function() {
+                                    //                             settingsVm.printDilutionInfo = sw.checked
+                                    //                             settingsVm.save()
+                                    //                         })
+                                    //                     }
+
+                                    //                     Connections {
+                                    //                         target: loadPrintDilution.item ? loadPrintDilution.item.children[1] : null
+                                    //                         onToggled: {
+                                    //                             settingsVm.printDilutionInfo = loadPrintDilution.item.children[1].checked
+                                    //                             settingsVm.save()
+                                    //                         }
+                                    //                     }
+                                    //                 }
+
+                                    //             } // Column end
+                                    //         }
+                                    //     }
+                                    // }
+                                    // 0️⃣ 功能设置页
                                     Item {
                                         id: funcPage
-                                        Layout.fillWidth: true
+                                        Layout.fillWidth: true          // 让它在外层布局里占满宽度
+                                        Layout.fillHeight: true         // ★ 必须：占满高度，这样里面的 ScrollView 才有空间滚动
 
-                                        Column {
+                                        ColumnLayout {                  // ★ 用 ColumnLayout，方便子项用 Layout.fillHeight
                                             anchors.fill: parent
                                             anchors.margins: 20
                                             spacing: 20
 
-                                            Rectangle { width: parent.width; height: 1; color: "#e5e7eb" }
+                                            // 顶部分割线
+                                            Rectangle {
+                                                Layout.fillWidth: true  // 在布局里占满宽度
+                                                height: 1
+                                                color: "#e5e7eb"
+                                            }
 
                                             // === 通用开关组件 ===
                                             Component {
                                                 id: switchRowComp
 
                                                 Row {
-                                                    width: funcPage.width - 40
+                                                    width: funcPage.width - 40     // 行宽度
                                                     height: 50
                                                     spacing: 20
 
                                                     Label {
                                                         id: lbl
-                                                        text: qsTr("未命名")
+                                                        text: qsTr("未命名")      // 默认文本
                                                         width: parent.width - 120
                                                         font.pixelSize: 20
                                                         color: "#1f2937"
@@ -1560,15 +2231,27 @@ function startTest() {
                                                 }
                                             }
 
-                                            // === 开关项列表 ===
-                                            Column {
-                                                spacing: 18
+                                            // === 外层 ScrollView：负责滚动所有开关项 ===
+                                            ScrollView {
+                                                id: scrollArea
+                                                Layout.fillWidth: true             // 在布局里占满宽度
+                                                Layout.fillHeight: true            // ★ 占满剩余高度，才能滚动
+                                                clip: true
+                                                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+                                                ScrollBar.vertical.interactive: true
 
-                                                // ① 启动自动打印
-                                                Loader {
-                                                    id: loadAutoPrint
-                                                    sourceComponent: switchRowComp
-                                                    onLoaded: {
+                                                // ScrollView 的内容区域，用 Column 放所有 Loader
+                                                Column {
+                                                    id: printSettingsColumn
+                                                    width: scrollArea.width        // 宽度跟随 ScrollView
+                                                    spacing: 18                   // 每行之间的间距
+
+                                                    // ① 启动自动打印
+                                                    Loader {
+                                                        id: loadAutoPrint
+                                                        sourceComponent: switchRowComp
+
+                                                        onLoaded: {
                                                             let row = item
                                                             let lbl = row.children[0]
                                                             let sw  = row.children[1]
@@ -1577,53 +2260,54 @@ function startTest() {
                                                             sw.checked = Qt.binding(() => settingsVm.autoPrint)
 
                                                             sw.onToggled.connect(function() {
-                                                                settingsVm.autoPrint = sw.checked    // <—— 正确写法
+                                                                settingsVm.autoPrint = sw.checked
                                                                 settingsVm.save()
                                                             })
-                                                        
-                                                    }
+                                                        }
 
-                                                    Connections {
-                                                        target: loadAutoPrint.item ? loadAutoPrint.item.children[1] : null
-                                                        onToggled: {
-                                                            settingsVm.autoPrint = loadAutoPrint.item.children[1].checked
-                                                            settingsVm.save()
+                                                        Connections {
+                                                            target: loadAutoPrint.item ? loadAutoPrint.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.autoPrint = loadAutoPrint.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
                                                         }
                                                     }
-                                                }
 
-                                                // ② ID号自动生成
-                                                Loader {
-                                                    id: loadAutoId
-                                                    sourceComponent: switchRowComp
-                                                    onLoaded: {
-                                                        let row = item
-                                                        let lbl = row.children[0]
-                                                        let sw  = row.children[1]
+                                                    // ② ID号自动生成
+                                                    Loader {
+                                                        id: loadAutoId
+                                                        sourceComponent: switchRowComp
 
-                                                        lbl.text = "ID号自动生成"
-                                                        sw.checked = Qt.binding(() => settingsVm.autoIdGen)
+                                                        onLoaded: {
+                                                            let row = item
+                                                            let lbl = row.children[0]
+                                                            let sw  = row.children[1]
 
-                                                        sw.onToggled.connect(function() {
-                                                            settingsVm.autoIdGen = sw.checked   // <—— 正确写法
-                                                            settingsVm.save()
-                                                        })
-                                                    }
+                                                            lbl.text = "ID号自动生成"
+                                                            sw.checked = Qt.binding(() => settingsVm.autoIdGen)
 
-                                                    Connections {
-                                                        target: loadAutoId.item ? loadAutoId.item.children[1] : null
-                                                        onToggled: {
-                                                            settingsVm.autoIdGen = loadAutoId.item.children[1].checked
-                                                            settingsVm.save()
+                                                            sw.onToggled.connect(function() {
+                                                                settingsVm.autoIdGen = sw.checked
+                                                                settingsVm.save()
+                                                            })
+                                                        }
+
+                                                        Connections {
+                                                            target: loadAutoId.item ? loadAutoId.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.autoIdGen = loadAutoId.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
                                                         }
                                                     }
-                                                }
 
-                                                // ③ 启动数据自动上传服务器
-                                                Loader {
-                                                    id: loadUpload
-                                                    sourceComponent: switchRowComp
-                                                    onLoaded: {
+                                                    // ③ 启动数据自动上传服务器
+                                                    Loader {
+                                                        id: loadUpload
+                                                        sourceComponent: switchRowComp
+
+                                                        onLoaded: {
                                                             let row = item
                                                             let lbl = row.children[0]
                                                             let sw  = row.children[1]
@@ -1635,75 +2319,189 @@ function startTest() {
                                                                 settingsVm.autoUpload = sw.checked
                                                                 settingsVm.save()
                                                             })
-                                                    }
+                                                        }
 
-                                                    Connections {
-                                                        target: loadUpload.item ? loadUpload.item.children[1] : null
-                                                        onToggled: {
-                                                            settingsVm.autoUpload = loadUpload.item.children[1].checked
-                                                            settingsVm.save()
+                                                        Connections {
+                                                            target: loadUpload.item ? loadUpload.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.autoUpload = loadUpload.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
                                                         }
                                                     }
-                                                }
 
-                                                // ④ 启用微动开关
-                                                Loader {
-                                                    id: loadMicro
-                                                    sourceComponent: switchRowComp
-                                                    onLoaded: {
-                                                        let row = item
-                                                        let lbl = row.children[0]
-                                                        let sw  = row.children[1]
+                                                    // ④ 启用微动开关
+                                                    Loader {
+                                                        id: loadMicro
+                                                        sourceComponent: switchRowComp
 
-                                                        lbl.text = "启用微动开关"
-                                                        sw.checked = Qt.binding(() => settingsVm.microSwitch)
+                                                        onLoaded: {
+                                                            let row = item
+                                                            let lbl = row.children[0]
+                                                            let sw  = row.children[1]
 
-                                                        sw.onToggled.connect(function() {
-                                                            settingsVm.microSwitch = sw.checked
-                                                            settingsVm.save()
-                                                        })
-                                                    }
+                                                            lbl.text = "启用微动开关"
+                                                            sw.checked = Qt.binding(() => settingsVm.microSwitch)
 
-                                                    Connections {
-                                                        target: loadMicro.item ? loadMicro.item.children[1] : null
-                                                        onToggled: {
-                                                            settingsVm.microSwitch = loadMicro.item.children[1].checked
-                                                            settingsVm.save()
+                                                            sw.onToggled.connect(function() {
+                                                                settingsVm.microSwitch = sw.checked
+                                                                settingsVm.save()
+                                                            })
+                                                        }
+
+                                                        Connections {
+                                                            target: loadMicro.item ? loadMicro.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.microSwitch = loadMicro.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
                                                         }
                                                     }
-                                                }
 
-                                                // ⑤ 厂家名称打印
-                                                Loader {
-                                                    id: loadManu
-                                                    sourceComponent: switchRowComp
-                                                    onLoaded: {
-                                                         let row = item
-                                                         let lbl = row.children[0]
-                                                         let sw  = row.children[1]
+                                                    // ⑤ 厂家名称打印
+                                                    Loader {
+                                                        id: loadManu
+                                                        sourceComponent: switchRowComp
 
-                                                         lbl.text = "厂家名称打印"
-                                                         sw.checked = Qt.binding(() => settingsVm.manufacturerPrint)
+                                                        onLoaded: {
+                                                            let row = item
+                                                            let lbl = row.children[0]
+                                                            let sw  = row.children[1]
 
-                                                         sw.onToggled.connect(function() {
-                                                            settingsVm.manufacturerPrint = sw.checked
-                                                            settingsVm.save()
-                                                        })
-                                                    }
+                                                            lbl.text = "厂家名称打印"
+                                                            sw.checked = Qt.binding(() => settingsVm.manufacturerPrint)
 
-                                                    Connections {
-                                                        target: loadManu.item ? loadManu.item.children[1] : null
-                                                        onToggled: {
-                                                            settingsVm.manufacturerPrint = loadManu.item.children[1].checked
-                                                            settingsVm.save()
+                                                            sw.onToggled.connect(function() {
+                                                                settingsVm.manufacturerPrint = sw.checked
+                                                                settingsVm.save()
+                                                            })
+                                                        }
+
+                                                        Connections {
+                                                            target: loadManu.item ? loadManu.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.manufacturerPrint = loadManu.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
                                                         }
                                                     }
-                                                }
-                                            }
 
+                                                    // ⑥ 打印样品来源
+                                                    Loader {
+                                                        id: loadPrintSrc
+                                                        sourceComponent: switchRowComp
 
-                                        }
+                                                        onLoaded: {
+                                                            let row = item
+                                                            let lbl = row.children[0]
+                                                            let sw  = row.children[1]
+
+                                                            lbl.text = "打印样品来源"
+                                                            sw.checked = Qt.binding(() => settingsVm.printSampleSource)
+
+                                                            sw.onToggled.connect(function() {
+                                                                settingsVm.printSampleSource = sw.checked
+                                                                settingsVm.save()
+                                                            })
+                                                        }
+
+                                                        Connections {
+                                                            target: loadPrintSrc.item ? loadPrintSrc.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.printSampleSource = loadPrintSrc.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // ⑦ 打印参考值
+                                                    Loader {
+                                                        id: loadPrintRef
+                                                        sourceComponent: switchRowComp
+
+                                                        onLoaded: {
+                                                            let row = item
+                                                            let lbl = row.children[0]
+                                                            let sw  = row.children[1]
+
+                                                            lbl.text = "打印参考值"
+                                                            sw.checked = Qt.binding(() => settingsVm.printReferenceValue)
+
+                                                            sw.onToggled.connect(function() {
+                                                                settingsVm.printReferenceValue = sw.checked
+                                                                settingsVm.save()
+                                                            })
+                                                        }
+
+                                                        Connections {
+                                                            target: loadPrintRef.item ? loadPrintRef.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.printReferenceValue = loadPrintRef.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // ⑧ 打印检测人员
+                                                    Loader {
+                                                        id: loadPrintPerson
+                                                        sourceComponent: switchRowComp
+
+                                                        onLoaded: {
+                                                            let row = item
+                                                            let lbl = row.children[0]
+                                                            let sw  = row.children[1]
+
+                                                            lbl.text = "打印检测人员"
+                                                            sw.checked = Qt.binding(() => settingsVm.printDetectedPerson)
+
+                                                            sw.onToggled.connect(function() {
+                                                                settingsVm.printDetectedPerson = sw.checked
+                                                                settingsVm.save()
+                                                            })
+                                                        }
+
+                                                        Connections {
+                                                            target: loadPrintPerson.item ? loadPrintPerson.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.printDetectedPerson = loadPrintPerson.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // ⑨ 打印稀释倍数
+                                                    Loader {
+                                                        id: loadPrintDilution
+                                                        sourceComponent: switchRowComp
+
+                                                        onLoaded: {
+                                                            let row = item
+                                                            let lbl = row.children[0]
+                                                            let sw  = row.children[1]
+
+                                                            lbl.text = "打印稀释倍数"
+                                                            sw.checked = Qt.binding(() => settingsVm.printDilutionInfo)
+
+                                                            sw.onToggled.connect(function() {
+                                                                settingsVm.printDilutionInfo = sw.checked
+                                                                settingsVm.save()
+                                                            })
+                                                        }
+
+                                                        Connections {
+                                                            target: loadPrintDilution.item ? loadPrintDilution.item.children[1] : null
+                                                            onToggled: {
+                                                                settingsVm.printDilutionInfo = loadPrintDilution.item.children[1].checked
+                                                                settingsVm.save()
+                                                            }
+                                                        }
+                                                    }
+                                                } // Column（ScrollView内容）结束
+                                            } // ScrollView 结束
+                                        } // ColumnLayout 结束
                                     }
+
 
                                     // 1️⃣ 工具
                                     Item {
@@ -1717,8 +2515,9 @@ function startTest() {
                                     // 2️⃣ 厂家信息
                                     Item {
                                         id: manufacturerInfoPage
-                                        anchors.fill: parent
-                                        anchors.margins: 10
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        Layout.margins: 10
 
                                         ColumnLayout {
                                             id: manuCol
@@ -2135,40 +2934,40 @@ Rectangle {
     }
 }
 
-// === 电机原点轮询定时器 ===
-Timer {
-    id: originCheckTimer
-    interval: 500
-    repeat: true
-    running: false
+    // === 电机原点轮询定时器 ===
+    Timer {
+        id: originCheckTimer
+        interval: 500
+        repeat: true
+        running: false
 
-    onTriggered: {
-        var val = motor.readRegister(0x34)   // ✅ 改为 0x34
-        console.log("轮询原点状态: 0x34 =", val)
+        onTriggered: {
+            var val = motor.readRegister(0x34)   // ✅ 改为 0x34
+            console.log("轮询原点状态: 0x34 =", val)
 
-        if (val === 1) {
-            console.log("✅ 电机回原点完成 → 延时 2 秒启动检测")
-            originCheckTimer.stop()
-            var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false; }', win)
-            t.triggered.connect(function() {
-                console.log("⏱[" + nowStr() + "] 延时 2000ms 结束 → 启动检测")
-                startTest()
-                t.destroy()
-            })
-            console.log("⏳[" + nowStr() + "] 启动延时 2000ms")
-            t.start()
-        } else if (val < 0) {
-            overlayText = "读取电机状态失败，请检查通信"
-            overlayBusy = false
-            originCheckTimer.stop()
+            if (val === 1) {
+                console.log("✅ 电机回原点完成 → 延时 2 秒启动检测")
+                originCheckTimer.stop()
+                var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false; }', win)
+                t.triggered.connect(function() {
+                    console.log("⏱[" + nowStr() + "] 延时 2000ms 结束 → 启动检测")
+                    startTest()
+                    t.destroy()
+                })
+                console.log("⏳[" + nowStr() + "] 启动延时 2000ms")
+                t.start()
+            } else if (val < 0) {
+                overlayText = "读取电机状态失败，请检查通信"
+                overlayBusy = false
+                originCheckTimer.stop()
+            }
         }
     }
-}
-CameraScannerPage {
-    id: scanPage
-    visible: false
-    anchors.fill: parent
-}
+    CameraScannerPage {
+        id: scanPage
+        visible: false
+        anchors.fill: parent
+    }
 
 }
  

@@ -85,6 +85,13 @@ void DBWorker::initialize() {
                    : emit errorOccurred("读取项目失败");
                 break;
             }
+            case DBTaskType::InsertProjectInfo: {
+                QSqlDatabase db = QSqlDatabase::database(connName_);
+                bool ok = ProjectsRepo::insertProjectInfo(db, task.info);
+                emit projectInfoInserted(ok);
+                break;
+            }
+
             case DBTaskType::DeleteProject:
                 emit projectDeleted(deleteProjectInternal(task.p1), task.p1);
                 break;
@@ -295,4 +302,9 @@ bool DBWorker::exportHistoryInternal(const QString& csvPath) {
            << r.detectedPerson << "," << r.dilutionInfo << "\n";
     }
     return true;
+}
+void DBWorker::postInsertProjectInfo(const QVariantMap& info) {
+    std::lock_guard<std::mutex> lk(m_);
+    q_.push(DBTask::insertProjectInfo(info));
+    cv_.notify_one();
 }

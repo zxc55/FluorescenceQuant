@@ -15,6 +15,10 @@ struct AppSettingsRow {
     bool microSwitch = false;        // 微动开关
     bool manufacturerPrint = false;  // ★ 厂家名称是否打印（你的 QML、ViewModel 正在使用这个字段）
 
+    bool printSampleSource = false;          // 是否打印样品来源
+    bool printReferenceValue = false;        // 是否打印参考值
+    bool printDetectedPerson = false;        // 是否打印检测人员
+    bool printDilutionInfo = false;          // 是否打印稀释倍数
     int backlight = 80;                      // 背光 (0~100)
     QString lang = QStringLiteral("zh_CN");  // 语言
 

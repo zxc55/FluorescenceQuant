@@ -1,8 +1,9 @@
 #include "ModbusWorkerThread.h"
 
+#include <termios.h>
+
 #include <chrono>
 #include <iostream>
-
 ModbusWorkerThread::ModbusWorkerThread(const std::string& device, int baud, int addr)
     : devPath(device), baudrate(baud), slaveAddr(addr) {}
 
@@ -30,6 +31,8 @@ bool ModbusWorkerThread::connectModbus() {
         return false;
     }
     std::cout << "✅ Modbus 连接成功: " << devPath << " 波特率 " << baudrate << std::endl;
+    int fd = modbus_get_socket(ctx);
+    tcflush(fd, TCIOFLUSH);  // ⭐ 清空输入输出缓冲区
 #endif
     return true;
 }
@@ -78,8 +81,12 @@ void ModbusWorkerThread::threadFunc() {
 #ifndef LOCAL_BUILD
     if (!connectModbus())
         return;
-    std::cout << "🧵 Modbus worker thread started." << std::endl;
+    int fd = modbus_get_socket(ctx);
 
+    modbus_set_debug(ctx, TRUE);
+    std::cout << "🧵 Modbus worker thread started." << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    tcflush(fd, TCIFLUSH);
     while (running.load()) {
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock, [&]() { return !cmdQueue.empty() || !running.load(); });
@@ -188,6 +195,7 @@ int ModbusWorkerThread::readRegister(int addr) {
     if (rc == -1) {
         std::cerr << "❌ 读取输入寄存器失败: " << modbus_strerror(errno)
                   << "  地址: 0x" << std::hex << addr << std::endl;
+
         return -1;
     }
 

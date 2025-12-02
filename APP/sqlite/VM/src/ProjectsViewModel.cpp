@@ -1,140 +1,140 @@
-#include "ProjectsViewModel.h"
+#include "ProjectsViewModel.h"  // 自己的头文件
 
-#include "ProjectsRepo.h"
+#include <QDebug>  // 用于 qDebug / qWarning / qInfo
 
-// === 构造函数 ===
-ProjectsViewModel::ProjectsViewModel(QObject* parent)
-    : QAbstractListModel(parent) {
-    openDatabase();
-    loadData();
+#include "DBWorker.h"  // DBWorker 的完整定义
+
+// =====================
+// 构造函数
+// =====================
+ProjectsViewModel::ProjectsViewModel(DBWorker* worker, QObject* parent)
+    : QAbstractListModel(parent)  // 调用父类构造
+      ,
+      m_worker(worker)  // 保存 DBWorker 指针
+{
+    qDebug() << "[ProjectsVM] constructed, worker =" << m_worker;
+
+    if (m_worker) {
+        // 当 DBWorker 发射 projectsLoaded 时，更新本地列表
+        connect(m_worker, &DBWorker::projectsLoaded,
+                this, &ProjectsViewModel::onProjectsLoaded,
+                Qt::QueuedConnection);
+
+        // 当 DBWorker 发射 projectDeleted 时，根据结果刷新
+        connect(m_worker, &DBWorker::projectDeleted,
+                this, &ProjectsViewModel::onProjectDeleted,
+                Qt::QueuedConnection);
+    }
 }
 
-// === 打开数据库 ===
-bool ProjectsViewModel::openDatabase() {
-// ✅ 数据库存放路径（SD 卡）
-#ifndef LOCAL_BUILD
-    const QString dbPath = "/mnt/SDCARD/app/db/app.db";
-#else
-    const QString dbPath = "/home/pribolab/Project/FluorescenceQuant/debugDir/app.db";
-#endif
-    // 连接名固定，防止重复连接
-    if (QSqlDatabase::contains("app_connection"))
-        m_db = QSqlDatabase::database("app_connection");
-    else
-        m_db = QSqlDatabase::addDatabase("QSQLITE", "app_connection");
-
-    m_db.setDatabaseName(dbPath);
-
-    if (!m_db.open()) {
-        qWarning() << "❌ 数据库打开失败:" << m_db.lastError().text();
-        return false;
-    }
-
-    qDebug() << "✅ 数据库打开成功:" << dbPath;
-    return true;
-}
-
-// === 加载项目列表数据 ===
-void ProjectsViewModel::loadData() {
-    beginResetModel();  // 通知视图：模型数据将被重新加载
-    m_list.clear();     // 清空旧数据
-
-    if (!m_db.isOpen() && !openDatabase()) {
-        endResetModel();
-        return;
-    }
-
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, name, batch, updated_at FROM projects ORDER BY id ASC");
-
-    if (!query.exec()) {
-        qWarning() << "❌ 查询 projects 表失败:" << query.lastError().text();
-        endResetModel();
-        return;
-    }
-
-    while (query.next()) {
-        ProjectItem item;
-        item.rid = query.value(0).toInt();
-        item.name = query.value(1).toString();
-        item.batch = query.value(2).toString();
-        item.updatedAt = query.value(3).toString();
-        m_list.append(item);
-    }
-
-    qDebug() << "✅ 加载项目数量:" << m_list.size();
-
-    endResetModel();      // 通知视图数据加载完成
-    emit countChanged();  // 更新 QML 侧绑定
-}
-
-// === QML 调用：刷新 ===
-void ProjectsViewModel::refresh() {
-    qDebug() << "[ProjectsViewModel] 刷新项目列表";
-    loadData();
-}
-
-// === QML 调用：删除指定项目 ===
-void ProjectsViewModel::deleteById(int rid) {
-    if (!m_db.isOpen() && !openDatabase())
-        return;
-
-    QSqlQuery query(m_db);
-    query.prepare("DELETE FROM projects WHERE id = :id");
-    query.bindValue(":id", rid);
-
-    if (!query.exec()) {
-        qWarning() << "❌ 删除项目失败:" << query.lastError().text();
-        return;
-    }
-
-    qInfo() << "🗑 已删除项目 id =" << rid;
-    loadData();
-}
-
-// === QAbstractListModel: 行数 ===
+// =====================
+// 必须实现：返回总行数
+// =====================
 int ProjectsViewModel::rowCount(const QModelIndex& parent) const {
-    Q_UNUSED(parent)
-    return m_list.size();
+    Q_UNUSED(parent)       // 不使用 parent
+    return m_list.size();  // 当前项目数量
 }
 
-// === QAbstractListModel: 数据 ===
+// =====================
+// 必须实现：根据 index + role 返回数据
+// =====================
 QVariant ProjectsViewModel::data(const QModelIndex& index, int role) const {
-    if (!index.isValid() || index.row() >= m_list.size())
-        return QVariant();
+    if (!index.isValid()                  // index 无效
+        || index.row() < 0                // 行号小于 0
+        || index.row() >= m_list.size())  // 行号越界
+        return QVariant();                // 返回空值
 
-    const ProjectItem& item = m_list.at(index.row());
+    const auto& item = m_list.at(index.row());  // 取出对应行的数据
+
     switch (role) {
     case RidRole:
-        return item.rid;
+        return item.rid;  // 返回项目 id
     case NameRole:
-        return item.name;
+        return item.name;  // 返回项目名称
     case BatchRole:
-        return item.batch;
+        return item.batch;  // 返回批次
     case UpdatedAtRole:
-        return item.updatedAt;
+        return item.updatedAt;  // 返回更新时间
     default:
-        return QVariant();
+        return QVariant();  // 未知 role 返回空
     }
 }
 
-// === QAbstractListModel: 角色名 ===
+// =====================
+// 必须实现：role -> 名称，用于 QML 访问 model.xxx
+// =====================
 QHash<int, QByteArray> ProjectsViewModel::roleNames() const {
     QHash<int, QByteArray> roles;
-    roles[RidRole] = "rid";
-    roles[NameRole] = "name";
-    roles[BatchRole] = "batch";
-    roles[UpdatedAtRole] = "updatedAt";
+    roles[RidRole] = "rid";              // QML: model.rid
+    roles[NameRole] = "name";            // QML: model.name
+    roles[BatchRole] = "batch";          // QML: model.batch
+    roles[UpdatedAtRole] = "updatedAt";  // QML: model.updatedAt
     return roles;
 }
 
-// === QML 调用：按行索引取数据 ===
+// =====================
+// QML 调用：刷新列表
+// =====================
+void ProjectsViewModel::refresh() {
+    if (!m_worker) {  // 没有 worker，打印警告
+        qWarning() << "[ProjectsVM] refresh() no worker!";
+        return;
+    }
+    m_worker->postLoadProjects();  // 向 DBWorker 发送“加载项目列表”任务
+}
+
+// =====================
+// QML 调用：删除指定 id 的项目
+// =====================
+void ProjectsViewModel::deleteById(int rid) {
+    if (!m_worker) {  // 没有 worker
+        qWarning() << "[ProjectsVM] deleteById() no worker!";
+        return;
+    }
+    m_worker->postDeleteProject(rid);  // 让 DBWorker 去删
+}
+
+// =====================
+// 槽函数：DBWorker 加载项目完成
+// =====================
+void ProjectsViewModel::onProjectsLoaded(const QVector<ProjectRow>& rows) {
+    beginResetModel();            // 通知视图：模型要整体重置
+    m_list.clear();               // 清理旧数据
+    m_list.reserve(rows.size());  // 预分配空间，避免多次 realloc
+
+    for (const auto& r : rows) {
+        ProjectItem item;
+        item.rid = r.id;  // 从 ProjectRow 拷贝字段
+        item.name = r.name;
+        item.batch = r.batch;
+        item.updatedAt = r.updatedAt;
+        m_list.append(item);
+    }
+
+    endResetModel();      // 通知视图数据重载完毕
+    emit countChanged();  // 通知 QML count 发生变化
+    emit projectsReady();
+    qInfo() << "[ProjectsVM] Loaded" << m_list.size() << "rows";
+}
+
+// =====================
+// 槽函数：DBWorker 删除项目完成
+// =====================
+void ProjectsViewModel::onProjectDeleted(bool ok, int id) {
+    qInfo() << "[ProjectsVM] delete result id =" << id << "ok =" << ok;
+    if (ok)
+        refresh();  // 删除成功后重新加载一遍
+}
+
+// =====================
+// QML 调用：按行号取一行数据
+// =====================
 QVariantMap ProjectsViewModel::get(int index) const {
     QVariantMap map;
-    if (index < 0 || index >= m_list.size())
+    if (index < 0 || index >= m_list.size())  // 越界保护
         return map;
 
-    const ProjectItem& item = m_list.at(index);
+    const auto& item = m_list.at(index);
     map["rid"] = item.rid;
     map["name"] = item.name;
     map["batch"] = item.batch;
@@ -142,36 +142,32 @@ QVariantMap ProjectsViewModel::get(int index) const {
     return map;
 }
 
-// === QML 调用：按 ID 获取项目名称 ===
+// =====================
+// QML 调用：根据 id 获取项目名称
+// =====================
 QString ProjectsViewModel::getNameById(int id) const {
-    for (const auto& item : m_list) {
-        if (item.rid == id)
-            return item.name;
+    for (const auto& item : m_list) {  // 遍历当前列表
+        if (item.rid == id)            // 找到匹配 id
+            return item.name;          // 返回名称
     }
-    return QString();
+    return QString();  // 没找到返回空字符串
 }
 
-// === QML 调用：按 ID 获取批次 ===
+// =====================
+// QML 调用：根据 id 获取批次
+// =====================
 QString ProjectsViewModel::getBatchById(int id) const {
-    for (const auto& item : m_list) {
-        if (item.rid == id)
-            return item.batch;
+    for (const auto& item : m_list) {  // 遍历当前列表
+        if (item.rid == id)            // 找到匹配 id
+            return item.batch;         // 返回批次
     }
-    return QString();
+    return QString();  // 没找到返回空字符串
 }
-// === QML 调用：插入检测记录 ===
-
-// 小工具：同时兼容 camelCase / snake_case 取值
-static QVariant pick(const QVariantMap& m, const char* camel, const char* snake) {
-    auto it = m.find(camel);
-    if (it != m.end())
-        return it.value();
-    it = m.find(snake);
-    if (it != m.end())
-        return it.value();
-    return QVariant();
-}
-
-bool ProjectsViewModel::insertProjectInfo(const QVariantMap& data) {
-    return ProjectsRepo::insertProjectInfo(m_db, data);
+bool ProjectsViewModel::insertProjectInfo(const QVariantMap& info) {
+    if (!m_worker) {
+        qWarning() << "[ProjectsVM] insertProjectInfo no worker!";
+        return false;
+    }
+    m_worker->postInsertProjectInfo(info);
+    return true;
 }

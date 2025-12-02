@@ -98,3 +98,30 @@ void SettingsViewModel::save() {
     }
     m_worker->postUpdateSettings(m_data);
 }
+void SettingsViewModel::setPrintSampleSource(bool v) {
+    if (m_data.printSampleSource == v)
+        return;
+    m_data.printSampleSource = v;
+    emit changed();
+}
+
+void SettingsViewModel::setPrintReferenceValue(bool v) {
+    if (m_data.printReferenceValue == v)
+        return;
+    m_data.printReferenceValue = v;
+    emit changed();
+}
+
+void SettingsViewModel::setPrintDetectedPerson(bool v) {
+    if (m_data.printDetectedPerson == v)
+        return;
+    m_data.printDetectedPerson = v;
+    emit changed();
+}
+
+void SettingsViewModel::setPrintDilutionInfo(bool v) {
+    if (m_data.printDilutionInfo == v)
+        return;
+    m_data.printDilutionInfo = v;
+    emit changed();
+}
