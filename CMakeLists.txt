@@ -70,8 +70,19 @@ else()
     qt_add_resources(APP_RCS "${QRC_OUT}" "${ICONS_QRC}")
 endif()
 
+set(CURL_ROOT "/home/pribolab/Project/curl-arm-install/usr/local")
+set(OPENSSL_ROOT_DIR "/home/pribolab/Project/openssl-install")
 
 
+include_directories(
+    ${CURL_ROOT}/include        # 正确的 curl/include
+    ${OPENSSL_ROOT_DIR}/include
+)
+
+link_directories(
+    ${CURL_ROOT}/lib
+    ${OPENSSL_ROOT_DIR}/lib
+)
 
 # 自动收集 APP/Recognition 下所有 .cpp / .h
 file(GLOB_RECURSE RECOGNITION_SOURCES
@@ -79,12 +90,14 @@ file(GLOB_RECURSE RECOGNITION_SOURCES
     ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.cpp
     ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.c
     ${CMAKE_SOURCE_DIR}/APP/Scanner/*.cpp
+    ${CMAKE_SOURCE_DIR}/APP/Net/*.cpp
 )
 
 file(GLOB_RECURSE RECOGNITION_HEADERS
     ${CMAKE_SOURCE_DIR}/APP/Recognition/*.h
     ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.h
     ${CMAKE_SOURCE_DIR}/APP/Scanner/*.h
+    ${CMAKE_SOURCE_DIR}/APP/Net/*.h
 )
 # -----------------------------------------------
 # 包含路径
@@ -95,6 +108,9 @@ include_directories(${CMAKE_SOURCE_DIR}/APP/libmodbus/include)
 include_directories(${CMAKE_SOURCE_DIR}/APP/modbus_rtu/inc)
 include_directories(${CMAKE_SOURCE_DIR}/APP/Recognition)
 include_directories(${CMAKE_SOURCE_DIR}/APP/QUIRC)
+include_directories(${CMAKE_SOURCE_DIR}/APP/Net)
+
+
 # -----------------------------------------------
 # 源文件与头文件
 # -----------------------------------------------
@@ -123,6 +139,7 @@ set(SOURCES
     APP/MyQmlComponents/MyCurveLoader/CurveLoader.cpp
    # APP/MyQmlComponents/MyPlotView/PlotView.cpp
     APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.cpp
+    APP/Net/HttpWorker.cpp
  
 )
 
@@ -156,7 +173,8 @@ set(HEADERS
     APP/MyQmlComponents/MyCurveLoader/CurveLoader.h
    # APP/MyQmlComponents/MyPlotView/PlotView.h
     APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h
-
+    APP/Net/HttpWorker.h
+    third_party/curl/include/curl/curl.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
@@ -167,6 +185,10 @@ add_executable(${PROJECT_NAME}
     ${RECOGNITION_HEADERS}
 
 )
+target_include_directories(${PROJECT_NAME}
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/third_party/curl/include   # curl 头文件
+)
 link_directories(${CMAKE_SOURCE_DIR}/APP/libmodbus/lib)
 target_include_directories(FluorescenceQuant PRIVATE
     ${CMAKE_SOURCE_DIR}/APP/CardDetect/inc
@@ -174,6 +196,7 @@ target_include_directories(FluorescenceQuant PRIVATE
     ${CMAKE_SOURCE_DIR}/APP/sqlite/VM/inc
     ${CMAKE_SOURCE_DIR}/APP/sqlite/Repo/inc
     ${CMAKE_SOURCE_DIR}/APP
+    ${CMAKE_SOURCE_DIR}/APP/Net
 )
 
 if(${TARGET_BOARD} STREQUAL "全志T113-S3")
@@ -205,4 +228,7 @@ target_link_libraries(FluorescenceQuant PRIVATE
   Qt5::QuickControls2
   Qt5::VirtualKeyboard
   Qt5::Sql
+  curl
+  ssl
+  crypto
 )

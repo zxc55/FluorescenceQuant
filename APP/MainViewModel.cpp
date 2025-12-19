@@ -22,11 +22,15 @@ static double fourPL_inverse(double y, const MainViewModel::FourPLParams& p) {
     // double C = p.C;
     // double D = p.D;
 
-    double A = 3.091684;
-    double B = 1.197694;
-    double C = 217.316723;
-    double D = 0.076063;
+    // double A = 3.091684;
+    // double B = 1.197694;
+    // double C = 217.316723;
+    // double D = 0.076063;
 
+    double A = 2.325288;
+    double B = 1.153325;
+    double C = 305.492974;
+    double D = 0.072872;
     // 防止 B=0 或 C<=0
     if (C <= 0 || std::fabs(B) < eps)
         return 0;

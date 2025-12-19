@@ -8,9 +8,7 @@
 // 构造函数
 // =====================
 ProjectsViewModel::ProjectsViewModel(DBWorker* worker, QObject* parent)
-    : QAbstractListModel(parent)  // 调用父类构造
-      ,
-      m_worker(worker)  // 保存 DBWorker 指针
+    : QAbstractListModel(parent), m_worker(worker)  // 保存 DBWorker 指针
 {
     qDebug() << "[ProjectsVM] constructed, worker =" << m_worker;
 

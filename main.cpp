@@ -16,7 +16,7 @@
 #include "APP/MyQmlComponents/MyLineSeries/MyLineSeries.h"
 #include "APP/MyQmlComponents/MyPlotView/PlotView.h"
 #include "APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h"
-
+#include "APP/Net/HttpWorker.h"
 // 工程组件
 #include "CardWatcherStd.h"
 #include "DecodeWorker.h"
@@ -29,12 +29,12 @@
 #include "V4L2MjpegGrabber.h"
 #include "printerDeviceController.h"
 // SQLite 组件
+
 #include "DBWorker.h"
 #include "DTO.h"
 #include "ProjectsViewModel.h"
 #include "SettingsViewModel.h"
 #include "UserViewModel.h"
-
 // 扫码
 #include "APP/Scanner/QrImageProvider.h"
 #include "APP/Scanner/QrScanner.h"
@@ -107,6 +107,9 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<MyLineSeries>("App", 1, 0, "MyLineSeries");
     qmlRegisterType<CurveLoader>("App", 1, 0, "CurveLoader");
 
+    HttpWorker http;
+    http.start();
+    http.enqueueGet("https://jsonplaceholder.typicode.com/posts/1");
     // ======================
     // DB 路径
     // ======================
@@ -148,7 +151,7 @@ int main(int argc, char* argv[]) {
     UserViewModel userVm;
     ProjectsViewModel projectsVm(db);
     HistoryViewModel historyVm(db);
-    PrinterDeviceController printerCtrl;
+    PrinterDeviceController printerCtrl(&settingsVm);
     // ==== 绑定 DB ====
     settingsVm.bindWorker(db);
     userVm.bindWorker(db);
