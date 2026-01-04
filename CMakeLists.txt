@@ -84,21 +84,7 @@ link_directories(
     ${OPENSSL_ROOT_DIR}/lib
 )
 
-# 自动收集 APP/Recognition 下所有 .cpp / .h
-file(GLOB_RECURSE RECOGNITION_SOURCES
-    ${CMAKE_SOURCE_DIR}/APP/Recognition/*.cpp
-    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.cpp
-    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.c
-    ${CMAKE_SOURCE_DIR}/APP/Scanner/*.cpp
-    ${CMAKE_SOURCE_DIR}/APP/Net/*.cpp
-)
 
-file(GLOB_RECURSE RECOGNITION_HEADERS
-    ${CMAKE_SOURCE_DIR}/APP/Recognition/*.h
-    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.h
-    ${CMAKE_SOURCE_DIR}/APP/Scanner/*.h
-    ${CMAKE_SOURCE_DIR}/APP/Net/*.h
-)
 # -----------------------------------------------
 # 包含路径
 # -----------------------------------------------
@@ -109,7 +95,24 @@ include_directories(${CMAKE_SOURCE_DIR}/APP/modbus_rtu/inc)
 include_directories(${CMAKE_SOURCE_DIR}/APP/Recognition)
 include_directories(${CMAKE_SOURCE_DIR}/APP/QUIRC)
 include_directories(${CMAKE_SOURCE_DIR}/APP/Net)
+include_directories(${CMAKE_SOURCE_DIR}/APP/Control_module)
 
+# 自动收集 APP/Recognition 下所有 .cpp / .h
+file(GLOB_RECURSE RECOGNITION_SOURCES
+    ${CMAKE_SOURCE_DIR}/APP/Recognition/*.cpp
+    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.cpp
+    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.c
+    ${CMAKE_SOURCE_DIR}/APP/Scanner/*.cpp
+    ${CMAKE_SOURCE_DIR}/APP/Net/*.cpp
+    ${CMAKE_SOURCE_DIR}/APP/Control_module/*.cpp
+)
+
+file(GLOB_RECURSE RECOGNITION_HEADERS
+    ${CMAKE_SOURCE_DIR}/APP/Recognition/*.h
+    ${CMAKE_SOURCE_DIR}/APP/QUIRC/*.h
+    ${CMAKE_SOURCE_DIR}/APP/Scanner/*.h
+    ${CMAKE_SOURCE_DIR}/APP/Control_module/*.h
+)
 
 # -----------------------------------------------
 # 源文件与头文件
@@ -140,7 +143,10 @@ set(SOURCES
    # APP/MyQmlComponents/MyPlotView/PlotView.cpp
     APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.cpp
     APP/Net/HttpWorker.cpp
- 
+    APP/Control_module/src/DeviceManager.cpp
+    APP/Control_module/src/DeviceProtocol.cpp
+    APP/Control_module/src/DeviceService.cpp
+    APP/Control_module/src/ModbusRtuClient.cpp
 )
 
 set(HEADERS
@@ -175,6 +181,13 @@ set(HEADERS
     APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h
     APP/Net/HttpWorker.h
     third_party/curl/include/curl/curl.h
+    APP/Control_module/inc/DeviceManager.h
+    APP/Control_module/inc/DeviceProtocol.h
+    APP/Control_module/inc/DeviceService.h
+    APP/Control_module/inc/ModbusRtuClient.h
+    APP/Control_module/inc/ModbusTypes.h
+    APP/Control_module/inc/DeviceState.h
+    APP/Control_module/inc/DeviceStatusObject.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
@@ -197,6 +210,7 @@ target_include_directories(FluorescenceQuant PRIVATE
     ${CMAKE_SOURCE_DIR}/APP/sqlite/Repo/inc
     ${CMAKE_SOURCE_DIR}/APP
     ${CMAKE_SOURCE_DIR}/APP/Net
+    ${CMAKE_SOURCE_DIR}/APP/Control_module/inc
 )
 
 if(${TARGET_BOARD} STREQUAL "全志T113-S3")

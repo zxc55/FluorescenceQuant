@@ -55,12 +55,12 @@ ApplicationWindow {
     Component.onCompleted: {
         VirtualKeyboardSettings.activeLocales = ["en_US", "zh_CN"]
         VirtualKeyboardSettings.locale = "zh_CN"
-        motor.start()
+        // motor.start()
         
-        zeroHomeTimer.start()
+        // zeroHomeTimer.start()
 
-        // 👉 延时再执行 motor.back()
-        delayBackTimer.start()
+        // // 👉 延时再执行 motor.back()
+        // delayBackTimer.start()
     }
 
     Timer {

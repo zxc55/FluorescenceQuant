@@ -4,7 +4,7 @@
 
 MotorController::MotorController(QObject* parent)
     : QObject(parent) {
-    worker = new ModbusWorkerThread("/dev/ttyS4", 115200, 1);
+    // worker = new ModbusWorkerThread("/dev/ttyS4", 115200, 1);
 }
 
 MotorController::~MotorController() {
@@ -15,10 +15,10 @@ MotorController::~MotorController() {
 }
 
 void MotorController::start() {
-    if (worker) {
-        worker->start();
-        emit logMessage("✅ Modbus worker started");
-    }
+    // if (worker) {
+    //     worker->start();
+    //     emit logMessage("✅ Modbus worker started");
+    // }
 }
 
 void MotorController::stop() {

@@ -34,19 +34,19 @@ bool UsersRepo::auth(QSqlDatabase db,
     QString role = q.value(0).toString();
     QString passDb = q.value(1).toString();
 
-    // 打印调试信息
-    qDebug() << "========== 登录调试 ==========";
-    qDebug() << "输入用户名:" << username;
-    qDebug() << "输入密码  :" << password;
-    qDebug() << "数据库密码:" << passDb;
-    qDebug() << "================================";
+    // // 打印调试信息
+    // qDebug() << "========== 登录调试 ==========";
+    // qDebug() << "输入用户名:" << username;
+    // qDebug() << "输入密码  :" << password;
+    // qDebug() << "数据库密码:" << passDb;
+    // qDebug() << "================================";
 
     if (password == passDb) {
         outRole = role;
         return true;
     }
 
-    qWarning() << "[UsersRepo] 密码不一致 → 登录失败";
+    //   qWarning() << "[UsersRepo] 密码不一致 → 登录失败";
     return false;
 }
 

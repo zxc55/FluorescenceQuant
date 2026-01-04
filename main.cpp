@@ -29,6 +29,7 @@
 #include "V4L2MjpegGrabber.h"
 #include "printerDeviceController.h"
 // SQLite 组件
+#include <QQmlContext>
 
 #include "DBWorker.h"
 #include "DTO.h"
@@ -38,7 +39,7 @@
 // 扫码
 #include "APP/Scanner/QrImageProvider.h"
 #include "APP/Scanner/QrScanner.h"
-
+#include "DeviceManager.h"
 static bool ensureDir(const QString& path) {
     QDir d;
     return d.exists(path) ? true : d.mkpath(path);
@@ -107,9 +108,9 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<MyLineSeries>("App", 1, 0, "MyLineSeries");
     qmlRegisterType<CurveLoader>("App", 1, 0, "CurveLoader");
 
-    HttpWorker http;
-    http.start();
-    http.enqueueGet("https://jsonplaceholder.typicode.com/posts/1");
+    // HttpWorker http;
+    // http.start();
+    // http.enqueueGet("https://jsonplaceholder.typicode.com/posts/1");
     // ======================
     // DB 路径
     // ======================
@@ -131,6 +132,12 @@ int main(int argc, char* argv[]) {
     cardWatcher.setWatchedCode(KEY_PROG1);
     cardWatcher.setDebounceMs(20);
     cardWatcher.start();
+
+    // ======================
+    // F4 modbus 设备控制
+    // ======================
+    DeviceManager* deviceMgr = new DeviceManager(&app);
+    deviceMgr->start();
 
     // ======================
     // DBWorker + QThread
@@ -195,7 +202,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("keys", &keysProxy);
     engine.rootContext()->setContextProperty("qrScanner", &qrScanner);
     engine.rootContext()->setContextProperty("printerCtrl", &printerCtrl);
-    engine.addImageProvider("qr", new QrImageProvider(&qrScanner));
+    engine.rootContext()->setContextProperty("deviceService", deviceMgr->service());
 
     QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(
