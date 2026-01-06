@@ -24,7 +24,9 @@ static const FuncDesc g_funcTable[] = {
     // 孵育状态：状态寄存器
     {DevFunc::ReadIncubState, 7, 1, ValueType::U16,
      true, false, true},
-
+    // 孵育时间到：状态寄存器
+    {DevFunc::incubatetimeout, 8, 1, ValueType::U16,
+     true, false, true},
     /* ================= 电机控制（命令） ================= */
     // 回原点：命令寄存器（写即触发）
     {DevFunc::MotorHome, 20, 1, ValueType::NONE,

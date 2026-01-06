@@ -5,7 +5,7 @@
 #include <algorithm>
 
 #include "DeviceState.h"
-
+#include "DeviceStatusObject.h"
 static float regsToFloat_BE(const QVector<uint16_t>& v) {
     if (v.size() < 2)
         return 0.0f;
@@ -19,94 +19,216 @@ static float regsToFloat_BE(const QVector<uint16_t>& v) {
     u.u = (uint32_t(v[0]) << 16) | uint32_t(v[1]);
     return u.f;
 }
-
 DeviceService::DeviceService(ModbusRtuClient* worker)
     : QObject(nullptr), m_worker(worker) {
-    // 注意：这里不要 startTimer / 不要 new QTimer
-    // 因为构造函数可能在主线程执行，后面会 moveToThread
 }
 
-void DeviceService::onThreadStarted() {
-    qDebug() << "[DeviceService] onThreadStarted, thread =" << QThread::currentThread();
-
-    // ★ 在工作线程创建 QTimer，并把它 parent 到 this（同线程安全）
-    if (!m_pollTimer) {
-        m_pollTimer = new QTimer(this);
-        m_pollTimer->setTimerType(Qt::CoarseTimer);
-        connect(m_pollTimer, &QTimer::timeout, this, &DeviceService::pollOnce, Qt::QueuedConnection);
-    }
+DeviceService::~DeviceService() {
+    stop();
 }
-
-void DeviceService::startPolling(int intervalMs) {
-    // ★ 关键：如果调用线程不是对象线程，转到对象线程执行
-    if (QThread::currentThread() != this->thread()) {
-        QMetaObject::invokeMethod(this, "startPolling",
-                                  Qt::QueuedConnection,
-                                  Q_ARG(int, intervalMs));
+void DeviceService::start(int pollIntervalMs) {
+    if (m_running)
         return;
-    }
 
-    if (!m_pollTimer) {
-        qWarning() << "[DeviceService] startPolling but timer not inited yet";
-        return;
-    }
-
-    qDebug() << "[DeviceService] startPolling interval =" << intervalMs;
-    m_pollTimer->start(intervalMs);
+    m_pollIntervalMs = pollIntervalMs;
+    m_running = true;
+    m_thread = std::thread(&DeviceService::threadLoop, this);
 }
-
-void DeviceService::stopPolling() {
-    if (QThread::currentThread() != this->thread()) {
-        QMetaObject::invokeMethod(this, "stopPolling", Qt::QueuedConnection);
+void DeviceService::stop() {
+    if (!m_running)
         return;
-    }
 
-    if (m_pollTimer && m_pollTimer->isActive()) {
-        m_pollTimer->stop();
-        qDebug() << "[DeviceService] polling stopped";
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        m_running = false;
     }
+    m_cv.notify_all();
+
+    if (m_thread.joinable())
+        m_thread.join();
+
+    qDebug() << "[DeviceService] std::thread stopped";
 }
-
 void DeviceService::exec(const QVector<ExecItem>& items) {
-    /*================ ① 确保在 DeviceService 线程 =================*/
-    if (QThread::currentThread() != this->thread()) {
-        QMetaObject::invokeMethod(
-            this,
-            [this, items]() { exec(items); },
-            Qt::QueuedConnection);
+    if (items.isEmpty())
         return;
+
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        m_queue.push(Task{TaskType::ExecItems, items});
     }
 
-    qDebug() << "[DeviceService] exec items =" << items.size();
+    m_cv.notify_one();
 
-    /*================ ② 逐条处理 =================*/
-    for (const ExecItem& it : items) {
-        switch (it.func) {
-        /*================ 写目标温度 =================*/
-        case DevFunc::SetTargetTemp: {
-            float temp = it.value.toFloat();
-
-            uint16_t cd, ab;
-            floatToRegs_CDAB(temp, cd, ab);
-
-            QVector<uint16_t> regs;
-            regs << cd << ab;
-
-            constexpr uint16_t TARGET_TEMP_ADDR = 0x0003;  // ⚠️按你设备实际改
-
-            m_worker->postWriteRegisters(TARGET_TEMP_ADDR, regs);
-            qDebug() << "[DeviceService] post write target temp =" << temp;
-            break;
-        }
-
-        /*================ 其他功能 =================*/
-        default:
-            qWarning() << "[DeviceService] exec unsupported func:"
-                       << int(it.func);
-            break;
-        }
-    }
+    qDebug() << "[DeviceService] exec queued items =" << items.size();
 }
+void DeviceService::threadLoop() {
+    using clock = std::chrono::steady_clock;
+
+    // ===== poll 定时 =====
+    auto nextPollTime = clock::now();  // 启动立即 poll 一次
+
+    // ===== 倒计时 1 秒 tick =====
+    auto lastSecondTick = clock::now();
+
+    while (true) {
+        /* =========================================================
+         * ① 每秒倒计时（不阻塞、不影响 poll / 写任务）
+         * ========================================================= */
+        {
+            auto now = clock::now();
+            if (now - lastSecondTick >= std::chrono::seconds(1)) {
+                lastSecondTick = now;
+                bool anyTimeout = false;
+                // 6 个孵育槽
+                for (int i = 0; i < 6; ++i) {
+                    if (!m_lastIncubPos[i])
+                        continue;  // 当前不在孵育
+
+                    int sec = 0;
+                    switch (i) {
+                    case 0:
+                        sec = m_statusObj.incubRemain1();
+                        break;
+                    case 1:
+                        sec = m_statusObj.incubRemain2();
+                        break;
+                    case 2:
+                        sec = m_statusObj.incubRemain3();
+                        break;
+                    case 3:
+                        sec = m_statusObj.incubRemain4();
+                        break;
+                    case 4:
+                        sec = m_statusObj.incubRemain5();
+                        break;
+                    case 5:
+                        sec = m_statusObj.incubRemain6();
+                        break;
+                    }
+                    // 已经结束，不再处理
+                    if (sec <= 0)
+                        continue;
+
+                    // ===== 倒计时 =====
+                    sec--;
+                    m_statusObj.setIncubRemain(i, sec);
+
+                    // ★ 关键：刚好结束
+                    if (sec == 0) {
+                        qDebug() << "[DeviceService] incub slot" << i << "finished";
+                        anyTimeout = true;
+                    }
+                    if (anyTimeout && !m_fuyuTimeoutSent) {
+                        ExecItem it;
+                        it.func = DevFunc::incubatetimeout;
+                        it.value = 1;
+
+                        exec({it});  // 进入线程队列
+
+                        m_fuyuTimeoutSent = true;
+
+                        qDebug() << "[DeviceService] fuyutimeout write addr=8";
+                    }
+                }
+            }
+        }
+
+        /* =========================================================
+         * ② 等待任务 / poll 时间 / 退出
+         * ========================================================= */
+        Task task;
+        bool hasTask = false;
+        bool doPoll = false;
+
+        {
+            std::unique_lock<std::mutex> lk(m_mutex);
+
+            m_cv.wait_until(
+                lk,
+                nextPollTime,
+                [this]() {
+                    return !m_queue.empty() || !m_running;
+                });
+
+            // ===== 退出条件 =====
+            if (!m_running && m_queue.empty())
+                break;
+
+            // ===== 优先处理写任务 =====
+            if (!m_queue.empty()) {
+                task = std::move(m_queue.front());
+                m_queue.pop();
+                hasTask = true;
+            } else {
+                // ===== poll 时间到 =====
+                doPoll = true;
+                nextPollTime = clock::now() +
+                               std::chrono::milliseconds(m_pollIntervalMs);
+            }
+        }
+
+        /* =========================================================
+         * ③ 执行写任务
+         * ========================================================= */
+        if (hasTask) {
+            switch (task.type) {
+            case TaskType::ExecItems:
+                for (const auto& it : task.execItems) {
+                    switch (it.func) {
+                    case DevFunc::SetTargetTemp: {
+                        float temp = it.value.toFloat();
+
+                        uint16_t cd, ab;
+                        floatToRegs_CDAB(temp, cd, ab);
+
+                        QVector<uint16_t> regs;
+                        regs << cd << ab;
+
+                        constexpr uint16_t TARGET_TEMP_ADDR = 0x0003;
+                        m_worker->postWriteRegisters(TARGET_TEMP_ADDR, regs);
+
+                        qDebug() << "[DeviceService] write target temp =" << temp;
+                        break;
+                    }
+
+                    case DevFunc::incubatetimeout: {  // ★ 孵育超时
+                        QVector<uint16_t> regs;
+                        regs << 1;  // 写 1
+
+                        constexpr uint16_t FUYU_TIMEOUT_ADDR = 8;
+                        m_worker->postWriteRegisters(FUYU_TIMEOUT_ADDR, regs);
+
+                        qDebug() << "[DeviceService] write incubate timeout = 1";
+                        break;
+                    }
+
+                    default:
+                        qWarning() << "[DeviceService] unsupported DevFunc:"
+                                   << int(it.func);
+                        break;
+                    }
+                }
+                break;
+
+            default:
+                break;
+            }
+            continue;
+        }
+
+        /* =========================================================
+         * ④ 执行 poll
+         * ========================================================= */
+        if (doPoll) {
+            pollOnceInternal();
+            continue;
+        }
+    }
+
+    qDebug() << "[DeviceService] threadLoop exit";
+}
+
 static void dumpDeviceStatus(const DeviceStatus& s) {
     qDebug().noquote()
         << "\n========== DeviceStatus ==========\n"
@@ -163,9 +285,11 @@ static void dumpDeviceStatus(const DeviceStatus& s) {
         << "\n==================================";
 }
 
-void DeviceService::pollOnce() {
+void DeviceService::pollOnceInternal() {
     // pollOnce 一定在工作线程触发
-    qDebug() << "\n[DEVICE] ===== pollOnce ===== thread=" << QThread::currentThread();
+    //  m_statusObj.setCurrentTemp(42.0f);
+
+    // qDebug() << "\n[DEVICE] ===== pollOnce ===== thread=" << QThread::currentThread();
     DeviceStatus m_status{};
     /* ================= ① 所有需要读取的功能 ================= */
     QVector<DevFunc> pollList = {
@@ -205,10 +329,10 @@ void DeviceService::pollOnce() {
 
         reqs.push_back(it);
 
-        qDebug().nospace()
-            << "[DEVICE] need read func=" << int(f)
-            << " addr=" << it.addr
-            << " count=" << it.count;
+        // qDebug().nospace()
+        //     << "[DEVICE] need read func=" << int(f)
+        //     << " addr=" << it.addr
+        //     << " count=" << it.count;
     }
 
     if (reqs.isEmpty()) {
@@ -244,11 +368,11 @@ void DeviceService::pollOnce() {
         merged.push_back({r.addr, r.count, {}});
     }
 
-    for (const auto& m : merged) {
-        qDebug().nospace()
-            << "[DEVICE] merged read addr=" << m.start
-            << " count=" << m.count;
-    }
+    // for (const auto& m : merged) {
+    //     qDebug().nospace()
+    //         << "[DEVICE] merged read addr=" << m.start
+    //         << " count=" << m.count;
+    // }
 
     /* ================= ⑤ 执行合并读 ================= */
     bool okAll = true;
@@ -265,8 +389,8 @@ void DeviceService::pollOnce() {
         }
 
         m.values = out;
-        qDebug() << "[DEVICE] merged raw regs addr=" << m.start
-                 << "count=" << m.count << "regs=" << m.values;
+        // qDebug() << "[DEVICE] merged raw regs addr=" << m.start
+        //          << "count=" << m.count << "regs=" << m.values;
     }
 
     /* ================= ⑥ 分发到各 ReqItem ================= */
@@ -303,17 +427,47 @@ void DeviceService::pollOnce() {
         switch (r.func) {
         case DevFunc::ReadCurrentTemp:
             m_status.currentTemp = regsToFloat_CDAB(r.out);
-            emit currentTempUpdated(m_status.currentTemp);
+            qDebug() << "[DEVICE] currentTemp=" << m_status.currentTemp;
+            m_statusObj.setCurrentTemp(m_status.currentTemp);
+            // emit currentTempUpdated(m_status.currentTemp);
             break;
 
         case DevFunc::SetTargetTemp:
             m_status.targetTemp = regsToFloat_CDAB(r.out);
             break;
 
-        case DevFunc::ReadLimitSwitch:
-            m_status.limitSwitch.raw = r.out[0];
-            emit limitSwitchUpdated(m_status.limitSwitch.raw);
+        case DevFunc::ReadLimitSwitch: {
+            uint16_t raw = r.out[0];
+
+            // ===== 解析 6 个孵育槽 bit =====
+            bool curr[6] = {
+                raw & (1 << 2),
+                raw & (1 << 3),
+                raw & (1 << 4),
+                raw & (1 << 5),
+                raw & (1 << 6),
+                raw & (1 << 7),
+            };
+
+            for (int i = 0; i < 6; ++i) {
+                // 更新孵育槽是否激活（给 QML）
+                m_statusObj.setIncubPos(i, curr[i]);
+
+                // 0 → 1：刚放入孵育槽，启动 6 分钟倒计时
+                if (!m_lastIncubPos[i] && curr[i]) {
+                    m_statusObj.setIncubRemain(i, INCUB_TOTAL_SEC);
+                }
+
+                // 1 → 0：移出孵育槽，清空倒计时
+                if (m_lastIncubPos[i] && !curr[i]) {
+                    m_statusObj.setIncubRemain(i, 0);
+                }
+
+                m_lastIncubPos[i] = curr[i];
+            }
+
             break;
+        }
 
         case DevFunc::WriteIncubFinishMask:
             m_status.incubFinish.raw = r.out[0];
@@ -323,6 +477,9 @@ void DeviceService::pollOnce() {
             m_status.incubState =
                 static_cast<IncubState>(r.out[0]);
             emit incubStateUpdated(r.out[0]);
+            break;
+        case DevFunc::incubatetimeout:
+
             break;
 
         case DevFunc::ReadMotorState:
@@ -347,5 +504,5 @@ void DeviceService::pollOnce() {
             break;
         }
     }
-    dumpDeviceStatus(m_status);
+    //  dumpDeviceStatus(m_status);
 }

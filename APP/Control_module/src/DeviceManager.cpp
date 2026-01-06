@@ -1,6 +1,5 @@
 #include "DeviceManager.h"
 
-#include <QCoreApplication>
 #include <QDebug>
 
 #include "DeviceService.h"
@@ -10,16 +9,6 @@ DeviceManager::DeviceManager(QObject* parent)
     : QObject(parent) {
     m_worker = new ModbusRtuClient;
     m_service = new DeviceService(m_worker);
-
-    m_worker->moveToThread(&m_thread);
-    m_service->moveToThread(&m_thread);
-
-    connect(&m_thread, &QThread::started,
-            m_service, &DeviceService::onThreadStarted);
-
-    connect(&m_thread, &QThread::started, this, [this]() {
-        m_service->startPolling(500);
-    });
 }
 
 DeviceManager::~DeviceManager() {
@@ -27,29 +16,28 @@ DeviceManager::~DeviceManager() {
 }
 
 QObject* DeviceManager::service() const {
-    return m_service;  // m_service 是 DeviceService*
+    return m_service;  // 暴露给 QML
 }
 
 void DeviceManager::start() {
-    qDebug() << "[DEV-MGR] start() called, thread running=" << m_thread.isRunning();
-    if (m_thread.isRunning())
+    qDebug() << "[DEV-MGR] start()";
+
+    if (!m_service)
         return;
 
-    m_thread.start();
+    // ✅ 启动 DeviceService 内部 std::thread
+    m_service->start(500);
 }
 
 void DeviceManager::stop() {
-    qDebug() << "[DEV-MGR] stop() called, thread running=" << m_thread.isRunning();
-    if (!m_thread.isRunning())
+    qDebug() << "[DEV-MGR] stop()";
+
+    if (!m_service)
         return;
 
-    // 让 service 在自己的线程里停 timer
-    QMetaObject::invokeMethod(m_service, "stopPolling", Qt::BlockingQueuedConnection);
+    // ✅ 停止通信线程（join 在内部）
+    m_service->stop();
 
-    m_thread.quit();
-    m_thread.wait();
-
-    // 线程停了再删对象（不跨线程 delete）
     delete m_service;
     m_service = nullptr;
 

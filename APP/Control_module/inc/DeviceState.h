@@ -40,7 +40,7 @@ struct DeviceStatus {
     LimitSwitchReg limitSwitch;  // addr 5
     IncubFinishReg incubFinish;  // addr 6
     IncubState incubState;       // addr 7
-
+    uint16_t fuyutimeout;        // addr 8
     /* ===== 电机 ===== */
     uint16_t motorState;  // addr 23
     uint16_t motorSteps;  // addr 24

@@ -2,21 +2,38 @@
 #include <QObject>
 #include <QThread>
 #include <QTimer>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 #include "DeviceProtocol.h"
 #include "DeviceState.h"
+#include "DeviceStatusObject.h"
 #include "ModbusRtuClient.h"
+enum class TaskType {
+    PollOnce,
+    ExecItems
+};
+
+struct Task {
+    TaskType type;
+    QVector<ExecItem> execItems;  // 仅 ExecItems 使用
+};
 class DeviceService : public QObject {
     Q_OBJECT
+    Q_PROPERTY(DeviceStatusObject* status READ status CONSTANT)
+
 public:
     explicit DeviceService(ModbusRtuClient* worker);
+    ~DeviceService();
 
     Q_INVOKABLE void exec(const QVector<ExecItem>& items);
-
-public slots:
-    void onThreadStarted();  // 在工作线程执行初始化
-    void startPolling(int intervalMs = 500);
-    void stopPolling();
+    DeviceStatusObject* status() { return &m_statusObj; }
+    // 启停后台线程
+    void start(int pollIntervalMs);
+    void stop();
 
 signals:
     void currentTempUpdated(float);
@@ -25,12 +42,30 @@ signals:
     void motorStateUpdated(uint16_t);
     void motorStepsUpdated(uint16_t);
 
-private slots:
-    void pollOnce();
+private:
+    // ===== 后台线程 =====
+    void threadLoop();
+
+    // ===== 原 pollOnce 逻辑，改为普通函数 =====
+    void pollOnceInternal();
 
 private:
-    void processLoop();
-    DeviceStatus m_status;
+    int m_pollIntervalMs = 500;
+    static constexpr int INCUB_TOTAL_SEC = 1 * 60;  // 6 分钟
+    // ===== 孵育超时寄存器配置 =====
+    static constexpr uint16_t FUYU_TIMEOUT_ADDR = 8;
+    // ===== 防止重复写 =====
+    bool m_fuyuTimeoutSent = false;
+    bool m_lastIncubPos[6] = {false, false, false, false, false, false};
+    DeviceStatus m_status;           // 协议层（struct）
+    DeviceStatusObject m_statusObj;  // ★ UI 层（QObject）
+
     ModbusRtuClient* m_worker = nullptr;
-    QTimer* m_pollTimer = nullptr;  // ★ 改为指针，确保在工作线程 new
+
+    std::thread m_thread;
+    std::atomic<bool> m_running{false};
+
+    std::queue<Task> m_queue;
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
 };

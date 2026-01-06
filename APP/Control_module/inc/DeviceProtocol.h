@@ -10,6 +10,7 @@ enum class DevFunc : uint16_t {
     ReadLimitSwitch,
     WriteIncubFinishMask,
     ReadIncubState,
+    incubatetimeout,
 
     MotorHome,
     MotorStart,

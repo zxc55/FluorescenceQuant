@@ -5,8 +5,7 @@ import QtQuick.Layouts 1.12
 Item {
     id: root
     anchors.fill: parent
-    visible: false
-
+    visible: true
     // ===== 常量 =====
     property int slotCount: 6
 
@@ -28,7 +27,38 @@ Item {
         anchors.fill: parent
         color: "#80000000"
     }
+    function incubStateText(active) {
+        return active ? "孵育中" : "空闲"
+    }
 
+    function incubStateColor(active) {
+        return active ? "#10b981" : "#9ca3af"
+    }
+    function isIncubDone(index) {
+        switch (index) {
+        case 0: return deviceService.status.incubPos1 && deviceService.status.incubRemain1 === 0
+        case 1: return deviceService.status.incubPos2 && deviceService.status.incubRemain2 === 0
+        case 2: return deviceService.status.incubPos3 && deviceService.status.incubRemain3 === 0
+        case 3: return deviceService.status.incubPos4 && deviceService.status.incubRemain4 === 0
+        case 4: return deviceService.status.incubPos5 && deviceService.status.incubRemain5 === 0
+        case 5: return deviceService.status.incubPos6 && deviceService.status.incubRemain6 === 0
+        }
+        return false
+    }
+
+    function incubBorderColorByIndex(index) {
+        if (isIncubDone(index))
+            return "#ef4444"      // 🔴 孵育结束：红色
+
+        switch (index) {
+        case 0: return incubStateColor(deviceService.status.incubPos1)
+        case 1: return incubStateColor(deviceService.status.incubPos2)
+        case 2: return incubStateColor(deviceService.status.incubPos3)
+        case 3: return incubStateColor(deviceService.status.incubPos4)
+        case 4: return incubStateColor(deviceService.status.incubPos5)
+        case 5: return incubStateColor(deviceService.status.incubPos6)
+        }
+    }
     // ===== 主卡片 =====
     Rectangle {
         width: 900
@@ -36,68 +66,131 @@ Item {
         radius: 12
         color: "#ffffff"
         anchors.centerIn: parent
+        /* ===== 右上角实时温度 ===== */
+        Text {
+            id: realtimeTempText
+            text: "实时温度："
+                + deviceService.status.currentTemp.toFixed(1)
+                + " ℃"
 
+            font.pixelSize: 16
+            font.bold: true
+            color: "#111827"
+
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: 16
+            anchors.rightMargin: 20
+        }
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 20
             spacing: 16
 
-            // ---------- 标题 ----------
-            Text {
-                text: "孵育槽管理"
-                font.pixelSize: 26
-                font.bold: true
-                Layout.alignment: Qt.AlignHCenter
-            }
+                // ---------- 标题 ----------
+                Text {
+                    text: "孵育槽管理"
+                    font.pixelSize: 26
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
 
-            // ---------- 孵育槽网格 ----------
-            GridLayout {
-                columns: 3
-                rowSpacing: 16
-                columnSpacing: 16
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                  GridLayout {
+                        columns: 3
+                        rowSpacing: 16
+                        columnSpacing: 16
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
 
-                Repeater {
-                    model: slotCount
+                        Repeater {
+                            model: slotCount
 
-                    Rectangle {
-                        width: 260
-                        height: 160
-                        radius: 10
-                        border.width: 2
-                        border.color: stateColor(slots[index].state)
-                        color: "#f9fafb"
+                            Rectangle {
+                                width: 260
+                                height: 160
+                                radius: 10
+                                color: "#f9fafb"
+                                border.width: 2
+                                border.color: incubBorderColorByIndex(index)
 
-                        Column {
-                            anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 6
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 8
 
-                            Text {
-                                text: "孵育槽 " + (index + 1)
-                                font.pixelSize: 18
-                                font.bold: true
-                            }
+                                    // ===== 标题 =====
+                                    Text {
+                                        text: "孵育槽 " + (index + 1)
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                    }
 
-                            Text {
-                                text: "温度: " + slots[index].temp.toFixed(1) + " ℃"
-                                font.pixelSize: 16
-                            }
+                                    // ===== 状态 =====
+                                    Text {
+                                        text: {
+                                            if (isIncubDone(index))
+                                            return "孵育结束"
+                                            switch (index) {
+                                            case 0: return incubStateText(deviceService.status.incubPos1)
+                                            case 1: return incubStateText(deviceService.status.incubPos2)
+                                            case 2: return incubStateText(deviceService.status.incubPos3)
+                                            case 3: return incubStateText(deviceService.status.incubPos4)
+                                            case 4: return incubStateText(deviceService.status.incubPos5)
+                                            case 5: return incubStateText(deviceService.status.incubPos6)
+                                            }
+                                        }
+                                        color: isIncubDone(index)? "#ef4444": incubBorderColorByIndex(index)
+                                        font.pixelSize: 16
+                                        font.bold: isIncubDone(index)
+                                    }
 
-                            Text {
-                                text: "剩余: " + formatTime(slots[index].remain)
-                                font.pixelSize: 16
-                            }
+                                    // ===== 剩余时间 =====
+                                    Text {
+                                        text: {
+                                            var active = false
+                                            var remain = 0
 
-                            Text {
-                                text: "状态: " + stateText(slots[index].state)
-                                font.pixelSize: 16
-                                color: stateColor(slots[index].state)
+                                            switch (index) {
+                                            case 0:
+                                                active = deviceService.status.incubPos1
+                                                remain = deviceService.status.incubRemain1
+                                                break
+                                            case 1:
+                                                active = deviceService.status.incubPos2
+                                                remain = deviceService.status.incubRemain2
+                                                break
+                                            case 2:
+                                                active = deviceService.status.incubPos3
+                                                remain = deviceService.status.incubRemain3
+                                                break
+                                            case 3:
+                                                active = deviceService.status.incubPos4
+                                                remain = deviceService.status.incubRemain4
+                                                break
+                                            case 4:
+                                                active = deviceService.status.incubPos5
+                                                remain = deviceService.status.incubRemain5
+                                                break
+                                            case 5:
+                                                active = deviceService.status.incubPos6
+                                                remain = deviceService.status.incubRemain6
+                                                break
+                                            }
+
+                                            return active
+                                                ? ("剩余时间：" + (remain > 0 ? formatTime(remain) : "00:00"))
+                                                : "剩余时间：--:--"
+                                        }
+
+                                        font.pixelSize: 16
+                                        color: "#374151"
+                                    }
+                                }
                             }
                         }
                     }
-                }
+
+                 
             }
 
             // ---------- 返回 ----------
@@ -109,7 +202,7 @@ Item {
                 onClicked: root.visible = false
             }
         }
-    }
+    
 
     // ===== 工具函数 =====
     function formatTime(sec) {

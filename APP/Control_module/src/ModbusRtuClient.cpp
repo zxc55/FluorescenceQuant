@@ -164,11 +164,11 @@ bool ModbusRtuClient::readRegisters(uint16_t addr, uint16_t count, QVector<uint1
         return false;         // 这里先返回 false，不要在底层疯狂 reconnect
     }
 
-    qDebug() << "[MODBUS] read ok"
-             << "slave=" << m_slaveId
-             << "addr=" << addr
-             << "count=" << count
-             << "regs=" << out;  // 成功时也把数据打印出来
+    // qDebug() << "[MODBUS] read ok"
+    //          << "slave=" << m_slaveId
+    //          << "addr=" << addr
+    //          << "count=" << count
+    //          << "regs=" << out;  // 成功时也把数据打印出来
 
     return true;  // 成功返回 true
 }
@@ -190,9 +190,9 @@ bool ModbusRtuClient::readBlock(uint16_t addr, uint16_t count, QVector<uint16_t>
         return reconnect();  // 这里按你策略：失败则触发重连
     }
 
-    qDebug() << "[MODBUS] read ok slave=" << m_slaveId
-             << "addr=" << addr << "count=" << count
-             << "regs=" << out;
+    // qDebug() << "[MODBUS] read ok slave=" << m_slaveId
+    //          << "addr=" << addr << "count=" << count
+    //          << "regs=" << out;
     return true;
 }
 void ModbusRtuClient::postWriteRegisters(uint16_t addr,
