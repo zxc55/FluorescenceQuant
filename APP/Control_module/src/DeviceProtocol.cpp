@@ -1,12 +1,12 @@
 #include "DeviceProtocol.h"
 
 /* ================= 协议配置表 ================= */
-static const FuncDesc g_funcTable[] = {
+const FuncDesc g_funcTable[] = {
 
     /* ================= 温度相关 ================= */
     // 当前温度：状态寄存器（只读）
     {DevFunc::ReadCurrentTemp, 1, 2, ValueType::FLOAT,
-     true, false, true},  // canRead, canWrite, canPoll
+     true, false, false},  // canRead, canWrite, canPoll
 
     // 目标温度：参数寄存器（可读可写）
     {DevFunc::SetTargetTemp, 3, 2, ValueType::FLOAT,
@@ -44,7 +44,7 @@ static const FuncDesc g_funcTable[] = {
     /* ================= 电机状态 ================= */
     // 电机状态：状态寄存器
     {DevFunc::ReadMotorState, 23, 1, ValueType::U16,
-     true, false, true},
+     false, false, false},
 
     // 电机步数：状态 + 参数（取决于固件）
     {DevFunc::ReadMotorSteps, 24, 1, ValueType::U16,
@@ -58,7 +58,8 @@ static const FuncDesc g_funcTable[] = {
     {DevFunc::EnableFluorescence, 25, 1, ValueType::U16,
      false, true, false},
 };
-
+const int g_funcTableSize =
+    sizeof(g_funcTable) / sizeof(g_funcTable[0]);
 const FuncDesc* findFuncDesc(DevFunc f) {
     for (const auto& d : g_funcTable) {
         if (d.func == f)

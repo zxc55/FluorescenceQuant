@@ -11,7 +11,9 @@ class DeviceStatusObject : public QObject {
     /* ===== 温度 ===== */
     Q_PROPERTY(float currentTemp READ currentTemp NOTIFY currentTempChanged)
     Q_PROPERTY(float targetTemp READ targetTemp NOTIFY targetTempChanged)
-
+    /* ===== 原点状态 ===== */
+    Q_PROPERTY(bool powerOnHome READ powerOnHome NOTIFY limitSwitchChanged)
+    Q_PROPERTY(bool cardHome READ cardHome NOTIFY limitSwitchChanged)
     /* ===== 孵育状态 ===== */
     Q_PROPERTY(bool incubPos1 READ incubPos1 NOTIFY limitSwitchChanged)
     Q_PROPERTY(bool incubPos2 READ incubPos2 NOTIFY limitSwitchChanged)
@@ -19,7 +21,11 @@ class DeviceStatusObject : public QObject {
     Q_PROPERTY(bool incubPos4 READ incubPos4 NOTIFY limitSwitchChanged)
     Q_PROPERTY(bool incubPos5 READ incubPos5 NOTIFY limitSwitchChanged)
     Q_PROPERTY(bool incubPos6 READ incubPos6 NOTIFY limitSwitchChanged)
+    /* ===== 孵育状态 ===== */
+    Q_PROPERTY(int incubState READ incubState NOTIFY incubStateChanged)
 
+    /* ===== 电机 ===== */
+    Q_PROPERTY(int motorState READ motorState NOTIFY motorStateChanged)
     /* ===== 孵育剩余时间（秒） ===== */
     Q_PROPERTY(int incubRemain1 READ incubRemain1 NOTIFY incubRemainChanged)
     Q_PROPERTY(int incubRemain2 READ incubRemain2 NOTIFY incubRemainChanged)
@@ -38,7 +44,7 @@ class DeviceStatusObject : public QObject {
 public:
     explicit DeviceStatusObject(QObject* parent = nullptr)
         : QObject(parent) {}
-
+    void dumpStatus() const;
     /* ===== getters ===== */
     float currentTemp() const { return m_currentTemp; }
     float targetTemp() const { return m_targetTemp; }
@@ -63,6 +69,10 @@ public:
     bool incubDone4() const { return m_incubPos4 && m_incubRemain4 == 0; }
     bool incubDone5() const { return m_incubPos5 && m_incubRemain5 == 0; }
     bool incubDone6() const { return m_incubPos6 && m_incubRemain6 == 0; }
+    bool powerOnHome() const { return m_powerOnHome; }
+    bool cardHome() const { return m_cardHome; }
+    int incubState() const { return m_incubState; }
+    int motorState() const { return m_motorState; }
 
     /* ===== setters（C++ 内部调用）===== */
     void setCurrentTemp(float v) {
@@ -70,6 +80,19 @@ public:
             return;
         m_currentTemp = v;
         emit currentTempChanged();
+    }
+    void setPowerOnHome(bool v) {
+        if (m_powerOnHome == v)
+            return;
+        m_powerOnHome = v;
+        emit limitSwitchChanged();
+    }
+
+    void setCardHome(bool v) {
+        if (m_cardHome == v)
+            return;
+        m_cardHome = v;
+        emit limitSwitchChanged();
     }
 
     void setTargetTemp(float v) {
@@ -130,16 +153,38 @@ public:
             return 0;
         }
     }
+    void setIncubState(int state) {
+        if (m_incubState == state)
+            return;
+
+        m_incubState = state;
+        emit incubStateChanged();
+    }
+    void setMotorState(int state) {
+        if (m_motorState == state)
+            return;
+
+        m_motorState = state;
+        emit motorStateChanged();
+    }
 
 signals:
     void currentTempChanged();
     void targetTempChanged();
     void limitSwitchChanged();
     void incubRemainChanged();
+    void incubStateChanged();
+    void motorStateChanged();
 
 private:
     float m_currentTemp = 0.0f;
     float m_targetTemp = 0.0f;
+
+    int m_incubState = 0;
+    int m_motorState = 0;
+
+    bool m_powerOnHome = false;
+    bool m_cardHome = false;
 
     bool m_incubPos1 = false;
     bool m_incubPos2 = false;

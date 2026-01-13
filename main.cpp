@@ -6,11 +6,11 @@
 #include <QDir>
 #include <QFile>
 #include <QMetaType>
+#include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QThread>
 #include <QVariantList>
-
 // 自定义组件
 #include "APP/MyQmlComponents/MyCurveLoader/CurveLoader.h"
 #include "APP/MyQmlComponents/MyLineSeries/MyLineSeries.h"
@@ -44,7 +44,22 @@ static bool ensureDir(const QString& path) {
     QDir d;
     return d.exists(path) ? true : d.mkpath(path);
 }
+static QString getTouchFromScript() {
+    QProcess p;
+    p.start("/usr/bin/find_touch.sh");
+    if (!p.waitForFinished(2000))
+        return QString();
 
+    QString out = QString::fromLocal8Bit(p.readAllStandardOutput());
+    // out = "Touch device: /dev/input/event3\n"
+
+    int idx = out.indexOf("/dev/input/");
+    if (idx < 0)
+        return QString();
+
+    QString dev = out.mid(idx).trimmed();
+    return dev;
+}
 // ===============================
 // DPI & platform 设置修复
 // ===============================
@@ -73,8 +88,19 @@ int main(int argc, char* argv[]) {
     // 输入法 / 触摸驱动
     qputenv("QT_QPA_PLATFORM",
             QByteArray("linuxfb:tty=/dev/fb0:size=1024x600:mmsize=271x159,tslib=1"));
+    QString touchDev = getTouchFromScript();
+
+    if (!touchDev.isEmpty()) {
+        qputenv("TSLIB_TSDEVICE", touchDev.toUtf8());
+        qDebug() << "Use touch:" << touchDev;
+    } else {
+        qDebug() << "Touch not found, fallback";
+    }
+
+    qputenv("QT_QPA_PLATFORM", "linuxfb");
     qputenv("QT_QPA_FB_TSLIB", "1");
-    qputenv("TSLIB_TSDEVICE", "/dev/input/event4");
+
+    // qputenv("TSLIB_TSDEVICE", "/dev/input/event4");
     qunsetenv("QT_QPA_GENERIC_PLUGINS");
 
     qputenv("QT_PLUGIN_PATH", "/usr/lib/arm-qt/plugins");

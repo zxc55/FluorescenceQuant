@@ -228,7 +228,6 @@ void DeviceService::threadLoop() {
 
     qDebug() << "[DeviceService] threadLoop exit";
 }
-
 static void dumpDeviceStatus(const DeviceStatus& s) {
     qDebug().noquote()
         << "\n========== DeviceStatus ==========\n"
@@ -284,7 +283,27 @@ static void dumpDeviceStatus(const DeviceStatus& s) {
         << "  fluorescence =" << s.fluorescence
         << "\n==================================";
 }
+void DeviceStatusObject::dumpStatus() const {
+    qDebug().noquote()
+        << "\n========== DeviceStatusObject ==========\n"
+        << "Temperature:\n"
+        << "  currentTemp =" << m_currentTemp << "°C\n"
+        << "  targetTemp  =" << m_targetTemp << "°C\n"
 
+        << "Home State:\n"
+        << "  powerOnHome =" << m_powerOnHome << "\n"
+        << "  cardHome    =" << m_cardHome << "\n"
+
+        << "Incub Positions:\n"
+        << "  pos1 =" << m_incubPos1 << " remain1 =" << m_incubRemain1 << "s\n"
+        << "  pos2 =" << m_incubPos2 << " remain2 =" << m_incubRemain2 << "s\n"
+        << "  pos3 =" << m_incubPos3 << " remain3 =" << m_incubRemain3 << "s\n"
+        << "  pos4 =" << m_incubPos4 << " remain4 =" << m_incubRemain4 << "s\n"
+        << "  pos5 =" << m_incubPos5 << " remain5 =" << m_incubRemain5 << "s\n"
+        << "  pos6 =" << m_incubPos6 << " remain6 =" << m_incubRemain6 << "s\n"
+
+        << "=======================================";
+}
 void DeviceService::pollOnceInternal() {
     // pollOnce 一定在工作线程触发
     //  m_statusObj.setCurrentTemp(42.0f);
@@ -438,7 +457,11 @@ void DeviceService::pollOnceInternal() {
 
         case DevFunc::ReadLimitSwitch: {
             uint16_t raw = r.out[0];
-
+            m_status.limitSwitch.raw = raw;
+            bool powerOnHome = (raw & (1 << 0)) != 0;  // bit0
+            bool cardHome = (raw & (1 << 1)) != 0;     // bit1
+            m_statusObj.setPowerOnHome(powerOnHome);
+            m_statusObj.setCardHome(cardHome);
             // ===== 解析 6 个孵育槽 bit =====
             bool curr[6] = {
                 raw & (1 << 2),
@@ -504,5 +527,5 @@ void DeviceService::pollOnceInternal() {
             break;
         }
     }
-    //  dumpDeviceStatus(m_status);
+    dumpDeviceStatus(m_status);
 }

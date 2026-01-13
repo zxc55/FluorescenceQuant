@@ -47,6 +47,7 @@ struct ExecItem {
     DevFunc func;    // 功能码
     QVariant value;  // 实际数据
 };
-
+extern const FuncDesc g_funcTable[];
+extern const int g_funcTableSize;
 /* 查表接口 */
 const FuncDesc* findFuncDesc(DevFunc f);
