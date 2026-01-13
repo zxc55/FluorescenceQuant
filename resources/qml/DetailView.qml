@@ -74,11 +74,13 @@ Item {
     ChartView {
         id: chart
         objectName: "chartView"   // C++ 可用，不依赖 qt_chart
-
+        legend.font.pixelSize: 20 
+        legend.visible: true
         anchors {
             top: parent.top
             topMargin: 60
             left: parent.left
+            
             right: parent.right
             bottom: parent.bottom
         }
@@ -89,6 +91,9 @@ Item {
             max: adcList.length > 0 ? adcList.length : 500
             tickCount: 10
             titleText: "数据点"
+            
+            labelsFont.pixelSize: 20     // ★ 刻度字体
+            titleFont.pixelSize: 20      // ★ 轴标题字体
         }
 
         // Y 轴
@@ -98,6 +103,9 @@ Item {
             max: yMax
             tickCount: 8
             titleText: "电压值"
+            
+            labelsFont.pixelSize: 20
+            titleFont.pixelSize: 20
         }
 
         // QML 的曲线不绘制（占位，让坐标轴显示）

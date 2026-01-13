@@ -31,7 +31,7 @@ bool ModbusRtuClient::open() {
 
     m_ctx = modbus_new_rtu(
         m_dev, m_baud, m_parity, m_dataBits, m_stopBits);
-    modbus_set_debug(m_ctx, TRUE);
+    // modbus_set_debug(m_ctx, TRUE);
     if (!m_ctx) {
         emit ioError("modbus_new_rtu failed");
         return false;

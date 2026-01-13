@@ -28,7 +28,8 @@ ApplicationWindow {
     readonly property color  line:       "#e5e7eb"
     readonly property int    radiusL:    12
     readonly property int    radiusS:    8
-
+    property int motor_state: deviceService.status.motorState
+    
     // 可能由 main.cpp 注入的对象（安全判空使用）
     // property var keysObj: (typeof keys !== "undefined") ? keys : null
     property bool cardInserted: keys ? keys.inserted : false
@@ -63,40 +64,40 @@ ApplicationWindow {
         // delayBackTimer.start()
     }
 
-    Timer {
-        id: delayBackTimer
-        interval: 5000  // 延迟 1.5 秒，按需修改1000~3000都可以
-        repeat: false
-        onTriggered: {
-            console.log(">> 延时执行 motor.back()")
-            motor.back()
-        }
-    }
+    // Timer {
+    //     id: delayBackTimer
+    //     interval: 5000  // 延迟 1.5 秒，按需修改1000~3000都可以
+    //     repeat: false
+    //     onTriggered: {
+    //         console.log(">> 延时执行 motor.back()")
+    //         motor.back()
+    //     }
+    // }
 
-    Timer {
-        id: zeroHomeTimer
-        interval: 3000
-        repeat: true
-        running: false
+    // Timer {
+    //     id: zeroHomeTimer
+    //     interval: 3000
+    //     repeat: true
+    //     running: false
        
-        onTriggered: {
-            var val = motor.readRegister(0x34)
-            console.log("🔍 原点状态 0x34 =", val)
+    //     onTriggered: {
+    //         var val = motor.readRegister(0x34)
+    //         console.log("🔍 原点状态 0x34 =", val)
 
-            if (val === 1) {
-                zeroHomeTimer.stop()
-                console.log("🎉 回原点成功 → 2 秒后执行 motor.runPosition")
+    //         if (val === 1) {
+    //             zeroHomeTimer.stop()
+    //             console.log("🎉 回原点成功 → 2 秒后执行 motor.runPosition")
 
-                var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false }', win)
-                t.triggered.connect(function() {
-                    console.log("🚀 开始运行 motor.runPosition")
-                    motor.runPosition(1, 0, 150, 59000)
-                    t.destroy()  // 清理 Timer
-                })
-                t.start()   // ★★ 必须启动
-            }
-        }
-    }
+    //             var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false }', win)
+    //             t.triggered.connect(function() {
+    //                 console.log("🚀 开始运行 motor.runPosition")
+    //                 motor.runPosition(1, 0, 150, 59000)
+    //                 t.destroy()  // 清理 Timer
+    //             })
+    //             t.start()   // ★★ 必须启动
+    //         }
+    //     }
+    // }
     Connections {
         target: userVm
 
@@ -109,13 +110,6 @@ ApplicationWindow {
             }
         }
     }
-//     Connections {
-//     target: settingsVm
-//     onSettingsLoaded: {
-//         // 现在 manufacturerPrint 有值了
-//         console.log("加载设置完成，manufacturerPrint=", settingsVm.manufacturerPrint)
-//     }
-// }
     // =====================================================
     // 登录遮罩层
     // =====================================================
@@ -274,124 +268,148 @@ function nowStr() {
     var ms = ("00" + d.getMilliseconds()).slice(-3)
     return Qt.formatTime(d, "hh:mm:ss") + "." + ms
 }
+Timer {
+    id: waitMotorReadyTimer
+    interval: 50        // 50ms 轮询一次
+    repeat: true
+    running: false
 
+    onTriggered: {
+       
+        console.log("[MotorCheck] motorState =", motor_state)
+
+        if (motor_state === 4) {   // ✅ 电机就绪
+            console.log("✅ 电机状态=5，开始检测")
+
+            stop()
+            doStartTest()    // 真正执行检测流程
+        }
+    }
+}
 function startTest() {
-    if (testRunning) {
-        console.log("⚠️[" + nowStr() + "] 已在检测中，忽略重复触发")
+    console.log("▶ 请求开始检测")
+
+  
+    console.log("当前 motor_state =", motor_state)
+
+    if (motor_state !== 4) {
+        console.log("⏳ 电机未就绪，等待 motorState == 5")
+
+        // 可选 UI 提示
+        overlayText = "电机准备中，请稍候..."
+        overlayBusy = true
+        overlayVisible = true
+
+        waitMotorReadyTimer.start()
         return
     }
-    testRunning = true
 
-    console.log("🧪[" + nowStr() + "] 回原点完成 → 延时 2 秒后启动检测")
-    overlayText = "正在检测中…"
-    overlayBusy = true
-    overlayVisible = true
+    // 如果已经是 5，直接开始
+    doStartTest()
+}
+Timer {
+    id: waitMotorStopTimer
+    interval: 20        // 20ms 轮询一次
+    repeat: true
+    running: false
 
-    // === 延时 2 秒后启动电机与采集 ===
-    var delayTimer = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false }', win)
-    console.log("⏳[" + nowStr() + "] 启动延时 2000ms → 即将启动采集与电机")
+    onTriggered: {
+        var state = deviceService.status.motorState
+      //  console.log("⏳ 等待电机状态，当前 =", state)
 
-    delayTimer.triggered.connect(function() {
-        console.log("⏱[" + nowStr() + "] 延时结束 → 启动采集与电机")
+        if (state === 5) {   // 5 = 停止
+            stop()
+            console.log("✅ 电机已停止，开始检测流程")
 
-        // === 启动 ADS1115 连续采集 ===
-        mainViewModel.setCurrentSample(tfSampleId.text)
-        mainViewModel.startReading()
-        console.log("🧪[" + nowStr() + "] 启动连续采集")
+            doStartTestInternal()
+        }
+    }
+}
+function doStartTest() {
+    // === 启动 ADS1115 连续采集 ===
+    mainViewModel.setCurrentSample(tfSampleId.text)
+    mainViewModel.startReading()
+    console.log("🧪[" + nowStr() + "] 启动连续采集")
+    console.log("▶ 请求开始检测，等待电机停止")
 
-        // === 启动电机运行 ===
-        motor.runPosition(1, 0, 150, 64000)
-        console.log("🚀[" + nowStr() + "] 电机开始运行")
+    waitMotorStopTimer.start()
+}
+function doStartTestInternal()
+{
+    console.log("✅[" + nowStr() + "] 电机停止 → 停止采集")
 
-        // === 检测电机状态直到停止 ===
-        var motorCheck = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true }', win)
-        motorCheck.triggered.connect(function() {
-            var status = motor.readRegister(0xF1)
-            console.log("📖[" + nowStr() + "] 电机状态 0xF1 =", status)
+    // === 停止采集 ===
+    mainViewModel.stopReading()
+    console.log("⏹[" + nowStr() + "] 停止采集")
 
-            if (status === 1) { // ✅ 停止状态
-                motorCheck.stop()
-                console.log("✅[" + nowStr() + "] 电机停止 → 停止采集")
+    // === 回原点 ===
+    uvadcList = mainViewModel.getAdcData(tfSampleId.text)
+    var res = mainViewModel.calcTC(uvadcList)          // 调用 C++ 函数
 
-                // === 停止采集 ===
-                mainViewModel.stopReading()
-                console.log("⏹[" + nowStr() + "] 停止采集")
+    var curNo = tfSampleId.text
+        // ① 如果和上一次一样 → 重新生成
+    if (curNo === lastSampleNo) {
+        console.log("⚠️ 样品编号重复，重新生成")
 
-                // === 回原点 ===
-                // motor.back()
-                // console.log("🔙[" + nowStr() + "] 回原点")
-                uvadcList = mainViewModel.getAdcData(tfSampleId.text)
-                var res = mainViewModel.calcTC(uvadcList)          // 调用 C++ 函数
+        var newNo = mainViewModel.generateSampleNo()
+        tfSampleId.text = newNo
+        curNo = newNo
+    }
 
-                var curNo = tfSampleId.text
-                // ① 如果和上一次一样 → 重新生成
-                if (curNo === lastSampleNo) {
-                    console.log("⚠️ 样品编号重复，重新生成")
+    // ② 记录为“已使用样品号”
+    lastSampleNo = curNo
 
-                    var newNo = mainViewModel.generateSampleNo()
-                    tfSampleId.text = newNo
-                    curNo = newNo
+    console.log("🧪 本次使用样品编号 =", curNo)
+    // === 读取界面输入信息 ===
+    var sampleNo = tfSampleId.text          // 样品编号
+    var projectId = projectPage.selectedId       
+    var projectName = projectsVm.getNameById(projectId)   // ★ 获取项目名称
+    var source   = tfSampleSource.text      // 样品来源
+    var name     = tfSampleName.text        // 样品名称
+    var batch    = projectsVm.getBatchById(projectPage.selectedId) // 批次编码
+    var curve    = standardCurveBox.currentText  // 标准曲线
+    var conc     = Number(res.concentration || 0)                        // 检测浓度
+    var ref      = parseFloat(refValueField.text || 0)  // 参考值
+    var result   = res.resultStr || ""                  // 检测结果
+    var time     = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss") // 时间
+    var unit     = tfLab.text               // 检测单位
+    var person   = tfOperator.text          // 检测人
+    var dilution = dilutionBox.currentText  // 稀释倍数
+
+    // === 组装记录对象 ===
+    var record = {
+                "projectId": projectId,
+                "projectName": projectName,   // ★ 写入数据库
+                "sampleNo": sampleNo,
+                "sampleSource": source,
+                "sampleName": name,
+                "standardCurve": curve,
+                "batchCode": batch,
+                "detectedConc": conc,
+                "referenceValue": ref,
+                "result": result,
+                "detectedTime": time,
+                "detectedUnit": unit,
+                "detectedPerson": person,
+                "dilutionInfo": dilution 
                 }
 
-                // ② 记录为“已使用样品号”
-                lastSampleNo = curNo
+        console.log("[DEBUG] 即将写入数据库:", JSON.stringify(record))
 
-                console.log("🧪 本次使用样品编号 =", curNo)
-                // === 读取界面输入信息 ===
-                var sampleNo = tfSampleId.text          // 样品编号
-                var projectId = projectPage.selectedId       
-                var projectName = projectsVm.getNameById(projectId)   // ★ 获取项目名称
-                var source   = tfSampleSource.text      // 样品来源
-                var name     = tfSampleName.text        // 样品名称
-                var batch    = projectsVm.getBatchById(projectPage.selectedId) // 批次编码
-                var curve    = standardCurveBox.currentText  // 标准曲线
-                var conc     = Number(res.concentration || 0)                        // 检测浓度
-                var ref      = parseFloat(refValueField.text || 0)  // 参考值
-                var result   = res.resultStr || ""                  // 检测结果
-                var time     = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss") // 时间
-                var unit     = tfLab.text               // 检测单位
-                var person   = tfOperator.text          // 检测人
-                var dilution = dilutionBox.currentText  // 稀释倍数
+        // === 写入数据库 ===
+        var ok = projectsVm.insertProjectInfo(record)
+        console.log(ok ? "[DB] 插入成功 ✅" : "[DB] 插入失败 ❌")
 
-                // === 组装记录对象 ===
-                var record = {
-                            "projectId": projectId,
-                            "projectName": projectName,   // ★ 写入数据库
-                            "sampleNo": sampleNo,
-                            "sampleSource": source,
-                            "sampleName": name,
-                            "standardCurve": curve,
-                            "batchCode": batch,
-                            "detectedConc": conc,
-                            "referenceValue": ref,
-                            "result": result,
-                            "detectedTime": time,
-                            "detectedUnit": unit,
-                            "detectedPerson": person,
-                            "dilutionInfo": dilution 
-                            }
- 
-                console.log("[DEBUG] 即将写入数据库:", JSON.stringify(record))
-
-                // === 写入数据库 ===
-                var ok = projectsVm.insertProjectInfo(record)
-                console.log(ok ? "[DB] 插入成功 ✅" : "[DB] 插入失败 ❌")
-
-                // === 界面提示完成 ===
-                overlayText = ok ? "检测完成，数据已保存 ✅" : "检测完成，但数据库写入失败 ❌"
-                overlayBusy = false
-                overlayVisible = true
-                testRunning = false
-                if(settingsVm.autoPrint)
-                {
-                   console.log( " 启动打印 ✅" )
-                   printerCtrl.printRecord(record)
-                }
-            }
-        })
-        motorCheck.start()
-    })
-    delayTimer.start()
+        // === 界面提示完成 ===
+        overlayText = ok ? "检测完成，数据已保存 ✅" : "检测完成，但数据库写入失败 ❌"
+        overlayBusy = false
+        overlayVisible = true
+        testRunning = false
+        if(settingsVm.autoPrint)
+        {
+            console.log( " 启动打印 ✅" )
+            printerCtrl.printRecord(record)
+        }
 }
     // 主体布局：左侧导航 + 右侧内容
     RowLayout {
@@ -485,65 +503,56 @@ function startTest() {
                     height: sideBar.tileH
                     padding: 0
                     onClicked:{ 
-                  if(settingsVm.microSwitch)
-                  {
-                   if (!cardInserted) {
-                            overlayText = "请检查检测卡位置"
-                            overlayBusy = false
-                            overlayVisible = true
-                            return
-                        }
-                  }
-
+                            if (!deviceService.status.cardHome) {
+                                        overlayText = "请检查检测卡位置"
+                                        overlayBusy = false
+                                        overlayVisible = true
+                                        return
+                                    }                           
                         console.log("检测插卡后 → 检查电机原点状态")
-                        var val = motor.readRegister(0x34)
-                        console.log("寄存器 0x34 值:", val)
-
-                        if (val === 0) {
-                            overlayText = "电机未在原点，正在回原点..."
-                            overlayBusy = true
-                            overlayVisible = true
-                            motor.back()
-                            originCheckTimer.start()
+                        var val = deviceService.status.powerOnHome
+                        console.log("上电原点值:", val)
+                        if (!val) {
+                            // overlayText = "电机未在原点，正在回原点..."
+                            // overlayBusy = true
+                            // overlayVisible = true
+                            // motor.back()
+                            // originCheckTimer.start()
                             return
-                        } else if (val > 0) {
-                            console.log("✅ 电机在原点，先前进一段再回原点")
-                            overlayText = "电机前进中..."
+                        } else{
+                            overlayText = "电机运行中..."
                             overlayBusy = true
                             overlayVisible = true
-                            motor.runPosition(1, 0, 100, 10000)
-
-                            var forwardCheck = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true; }', win)
-                            forwardCheck.triggered.connect(function() {
-                                var status = motor.readRegister(0xF1)
-                                console.log("⚙️ 电机状态 0xF1 =", status)
-                                if (status === 1) {
-                                    forwardCheck.stop()
-                                    console.log("✅ 前进完成，开始回原点")
-                                    overlayText = "返回原点中..."
-                                    motor.back()
-                                    var backTimer = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true; }', win)
-                                    backTimer.triggered.connect(function() {
-                                        var val2 = motor.readRegister(0x34)
-                                        console.log("📖 寄存器 0x34 =", val2)
-                                        if (val2 === 1) {
-                                            backTimer.stop()
-                                            console.log("✅ 已回原点，准备开始检测")
-                                            overlayText = "准备检测中..."
-                                            overlayBusy = true
-                                            overlayVisible = true
-                                            startTest()   // ✅ 只在这里启动一次
-                                        }
-                                    })
-                                    backTimer.start()
-                                }
-                            })
-                            forwardCheck.start()
-                        } else {
-                            overlayText = "读取电机状态失败，请检查通信"
-                            overlayBusy = false
-                            overlayVisible = true
-                        }         
+                            deviceService.motorStart()
+                            console.log("---------检测中---------")
+                            startTest()
+                            // var forwardCheck = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true; }', win)
+                            // forwardCheck.triggered.connect(function() {
+                            //     var status = motor.readRegister(0xF1)
+                            //     console.log("⚙️ 电机状态 0xF1 =", status)
+                            //     if (status === 1) {
+                            //         forwardCheck.stop()
+                            //         console.log("✅ 前进完成，开始回原点")
+                            //         overlayText = "返回原点中..."
+                            //         motor.back()
+                            //         var backTimer = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true; }', win)
+                            //         backTimer.triggered.connect(function() {
+                            //             var val2 = motor.readRegister(0x34)
+                            //             console.log("📖 寄存器 0x34 =", val2)
+                            //             if (val2 === 1) {
+                            //                 backTimer.stop()
+                            //                 console.log("✅ 已回原点，准备开始检测")
+                            //                 overlayText = "准备检测中..."
+                            //                 overlayBusy = true
+                            //                 overlayVisible = true
+                            //                 startTest()   // ✅ 只在这里启动一次
+                            //             }
+                            //         })
+                            //         backTimer.start()
+                            //     }
+                            // })
+                           //  forwardCheck.start()
+                        }          
                     }
                 background: Rectangle {
                             anchors.fill: parent; radius: 10
@@ -1377,21 +1386,30 @@ function startTest() {
                                         Rectangle {
                                             width: historyPage.w_sel; height: parent.height; color: "transparent"
                                         }
-                                        Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "ID";       font.bold: true } }
+                                        Rectangle { width: historyPage.w_id; 
+                                              height: parent.height; color: "transparent"; 
+                                              Text { 
+                                                anchors.centerIn: parent;
+                                                text: "ID";       
+                                                font.bold: true 
+                                                font.pixelSize: 14
+                
+                                                } 
+                                        }
                                         Rectangle { width: 0;                      height: parent.height; color: "transparent"; visible: false }
-                                        Rectangle { width: historyPage.w_pname;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "项目名称"; font.bold: true }}
-                                        Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品编号"; font.bold: true } }
-                                        Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品来源"; font.bold: true } }
-                                        Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "样品名称"; font.bold: true } }
-                                        Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "标准曲线"; font.bold: true } }
-                                        Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "批次";     font.bold: true } }
-                                        Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "浓度";     font.bold: true } }
-                                        Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "参考";     font.bold: true } }
-                                        Rectangle { width: historyPage.w_res;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "结果";     font.bold: true } }
-                                        Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "检测时间"; font.bold: true } }
-                                        Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "单位";     font.bold: true } }
-                                        Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "检测人";   font.bold: true } }
-                                        Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: "稀释倍数"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_pname;    height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "项目名称"; font.bold: true }}
+                                        Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "样品编号"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "样品来源"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "样品名称"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "标准曲线"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "批次";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "浓度";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "参考";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_res;      height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "结果";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "检测时间"; font.bold: true } }
+                                        Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "单位";     font.bold: true } }
+                                        Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "检测人";   font.bold: true } }
+                                        Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "稀释倍数"; font.bold: true } }
                                     }
                                 }
 
@@ -1445,25 +1463,25 @@ function startTest() {
                                                 }
 
                                                 // 其余列
-                                                Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: modelId } }
+                                                Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: modelId } }
                                                // Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectId } }
                                                 Rectangle { width: historyPage.w_pid;      height:parent.height;  visible: false}
-                                                Rectangle { width: historyPage.w_pname;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectName }}
-                                                Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleNo } }
-                                                Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleSource } }
-                                                Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: sampleName } }
-                                                Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: standardCurve } }
-                                                Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: batchCode } }
-                                                Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: Number(detectedConc).toFixed(2) } }
-                                                Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: Number(referenceValue).toFixed(2) } }
+                                                Rectangle { width: historyPage.w_pname;    height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: projectName }}
+                                                Rectangle { width: historyPage.w_no;       height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: sampleNo } }
+                                                Rectangle { width: historyPage.w_src;      height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: sampleSource } }
+                                                Rectangle { width: historyPage.w_name;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: sampleName } }
+                                                Rectangle { width: historyPage.w_curve;    height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: standardCurve } }
+                                                Rectangle { width: historyPage.w_batch;    height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: batchCode } }
+                                                Rectangle { width: historyPage.w_conc;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: Number(detectedConc).toFixed(2) } }
+                                                Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: Number(referenceValue).toFixed(2) } }
                                                 Rectangle {
                                                     width: historyPage.w_res; height: parent.height; color: "transparent"
                                                     Text { anchors.centerIn: parent; text: result; color: result === "合格" ? "green" : "red" }
                                                 }
-                                                Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedTime } }
-                                                Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedUnit } }
-                                                Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: detectedPerson } }
-                                                Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: dilutionInfo } }
+                                                Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: detectedTime } }
+                                                Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: detectedUnit } }
+                                                Rectangle { width: historyPage.w_person;   height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: detectedPerson } }
+                                                Rectangle { width: historyPage.w_dilution; height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: dilutionInfo } }
                                             }
 
                                             MouseArea {

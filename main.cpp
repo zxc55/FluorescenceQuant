@@ -40,6 +40,10 @@
 #include "APP/Scanner/QrImageProvider.h"
 #include "APP/Scanner/QrScanner.h"
 #include "DeviceManager.h"
+// 状态对象
+#include "DeviceService.h"
+#include "DeviceStatusObject.h"
+
 static bool ensureDir(const QString& path) {
     QDir d;
     return d.exists(path) ? true : d.mkpath(path);
@@ -133,7 +137,7 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<QrScanner>("App", 1, 0, "QrScanner");
     qmlRegisterType<MyLineSeries>("App", 1, 0, "MyLineSeries");
     qmlRegisterType<CurveLoader>("App", 1, 0, "CurveLoader");
-
+    qmlRegisterType<DeviceService>("App", 1, 0, "DeviceService");
     // HttpWorker http;
     // http.start();
     // http.enqueueGet("https://jsonplaceholder.typicode.com/posts/1");

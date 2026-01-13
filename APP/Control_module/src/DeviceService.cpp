@@ -49,9 +49,18 @@ void DeviceService::stop() {
 
     qDebug() << "[DeviceService] std::thread stopped";
 }
+void DeviceService::motorStart() {
+    ExecItem it;
+    it.func = DevFunc::MotorStart;
+    it.value = 1;  // 写 1 触发
+
+    exec({it});
+}
 void DeviceService::exec(const QVector<ExecItem>& items) {
-    if (items.isEmpty())
+    if (items.isEmpty()) {
+        qDebug() << "[DeviceService] exec empty items";
         return;
+    }
 
     {
         std::lock_guard<std::mutex> lk(m_mutex);
@@ -202,7 +211,16 @@ void DeviceService::threadLoop() {
                         qDebug() << "[DeviceService] write incubate timeout = 1";
                         break;
                     }
+                    case DevFunc::MotorStart: {
+                        QVector<uint16_t> regs1;
+                        regs1 << 1;  // 写 1
 
+                        constexpr uint16_t START_ADDR = 21;
+                        m_worker->postWriteRegisters(START_ADDR, regs1);
+
+                        qDebug() << "[DeviceService] write start = 1";
+                        break;
+                    }
                     default:
                         qWarning() << "[DeviceService] unsupported DevFunc:"
                                    << int(it.func);
@@ -435,7 +453,7 @@ void DeviceService::pollOnceInternal() {
         if (!filled)
             std::fill(r.out.begin(), r.out.end(), 0);
 
-        qDebug() << "[DEVICE] addr=" << r.addr << "raw regs=" << r.out;
+        // qDebug() << "[DEVICE] addr=" << r.addr << "raw regs=" << r.out;
     }
 
     if (!okAll)
@@ -446,7 +464,7 @@ void DeviceService::pollOnceInternal() {
         switch (r.func) {
         case DevFunc::ReadCurrentTemp:
             m_status.currentTemp = regsToFloat_CDAB(r.out);
-            qDebug() << "[DEVICE] currentTemp=" << m_status.currentTemp;
+            //    qDebug() << "[DEVICE] currentTemp=" << m_status.currentTemp;
             m_statusObj.setCurrentTemp(m_status.currentTemp);
             // emit currentTempUpdated(m_status.currentTemp);
             break;
@@ -507,6 +525,7 @@ void DeviceService::pollOnceInternal() {
 
         case DevFunc::ReadMotorState:
             m_status.motorState = r.out[0];
+            m_statusObj.setMotorState(m_status.motorState);
             emit motorStateUpdated(r.out[0]);
             break;
 
@@ -527,5 +546,5 @@ void DeviceService::pollOnceInternal() {
             break;
         }
     }
-    dumpDeviceStatus(m_status);
+    //  dumpDeviceStatus(m_status);
 }

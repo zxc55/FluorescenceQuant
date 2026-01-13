@@ -5,6 +5,7 @@
 #include <QtGlobal>
 #include <cstdint>
 
+#include "QDebug"
 class DeviceStatusObject : public QObject {
     Q_OBJECT
 
@@ -92,6 +93,7 @@ public:
         if (m_cardHome == v)
             return;
         m_cardHome = v;
+        qDebug() << "cardHome" << v;
         emit limitSwitchChanged();
     }
 
