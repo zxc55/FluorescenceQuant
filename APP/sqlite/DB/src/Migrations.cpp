@@ -212,8 +212,6 @@ CREATE TABLE IF NOT EXISTS project_info(
 );
 )SQL");
 
-    migrateProjectInfo(db);
-
     // ===== adc_data =====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS adc_data(
@@ -227,5 +225,29 @@ CREATE TABLE IF NOT EXISTS adc_data(
 
     qInfo() << "[MIGRATE] v1 done ✅";
 
+    // ===== qr_method_config（独立表）=====
+    execOne(q, R"SQL(
+CREATE TABLE IF NOT EXISTS qr_method_config(
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    projectId       TEXT    NOT NULL,
+    projectName     TEXT    NOT NULL DEFAULT '',
+    batchCode       TEXT    NOT NULL DEFAULT '',
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    methodName      TEXT    NOT NULL DEFAULT '',
+    methodData      TEXT    NOT NULL DEFAULT '',
+    temperature     REAL    NOT NULL DEFAULT 0.0,
+    timeSec         INTEGER NOT NULL DEFAULT 0,
+    C1              INTEGER NOT NULL DEFAULT 0,
+    T1              INTEGER NOT NULL DEFAULT 0,
+    C2              INTEGER NOT NULL DEFAULT 0,
+    T2              INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(projectId, batchCode)
+);
+)SQL");
+
+    execOne(q, "CREATE INDEX IF NOT EXISTS idx_qmc_pid   ON qr_method_config(projectId);");
+    execOne(q, "CREATE INDEX IF NOT EXISTS idx_qmc_batch ON qr_method_config(batchCode);");
+    execOne(q, "CREATE INDEX IF NOT EXISTS idx_qmc_upd   ON qr_method_config(updated_at);");
+    migrateProjectInfo(db);
     return true;
 }

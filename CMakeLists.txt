@@ -131,22 +131,25 @@ set(SOURCES
     APP/sqlite/DB/src/Migrations.cpp
     APP/sqlite/DB/src/SqlUtil.cpp
     APP/sqlite/Repo/src/SettingsRepo.cpp
+    APP/sqlite/Repo/src/QrRepo.cpp
     APP/sqlite/Repo/src/UsersRepo.cpp
     APP/sqlite/VM/src/SettingsViewModel.cpp
     APP/sqlite/VM/src/UserViewModel.cpp
     APP/sqlite/Repo/src/ProjectsRepo.cpp
     APP/sqlite/VM/src/ProjectsViewModel.cpp
     APP/sqlite/VM/src/HistoryViewModel.cpp
+    APP/sqlite/VM/src/QrRepoModel.cpp
     APP/sqlite/Repo/src/HistoryRepo.cpp
     APP/MyQmlComponents/MyLineSeries/MyLineSeries.cpp
     APP/MyQmlComponents/MyCurveLoader/CurveLoader.cpp
-   # APP/MyQmlComponents/MyPlotView/PlotView.cpp
     APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.cpp
-    APP/Net/HttpWorker.cpp
     APP/Control_module/src/DeviceManager.cpp
     APP/Control_module/src/DeviceProtocol.cpp
     APP/Control_module/src/DeviceService.cpp
     APP/Control_module/src/ModbusRtuClient.cpp
+    APP/Net/src/TaskQueueWorker.cpp
+    APP/Net/src/LabKeyService.cpp
+    APP/Net/src/LabKeyClient.cpp
 )
 
 set(HEADERS
@@ -169,6 +172,8 @@ set(HEADERS
     APP/sqlite/DB/inc/SqlUtil.h
     APP/sqlite/Repo/inc/SettingsRepo.h
     APP/sqlite/Repo/inc/UsersRepo.h
+    APP/sqlite/Repo/inc/QrRepo.h
+    APP/sqlite/VM/inc/QrRepoModel.h
     APP/sqlite/VM/inc/SettingsViewModel.h
     APP/sqlite/VM/inc/UserViewModel.h
     APP/sqlite/Repo/inc/ProjectsRepo.h
@@ -179,7 +184,6 @@ set(HEADERS
     APP/MyQmlComponents/MyCurveLoader/CurveLoader.h
    # APP/MyQmlComponents/MyPlotView/PlotView.h
     APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h
-    APP/Net/HttpWorker.h
     third_party/curl/include/curl/curl.h
     APP/Control_module/inc/DeviceManager.h
     APP/Control_module/inc/DeviceProtocol.h
@@ -188,6 +192,9 @@ set(HEADERS
     APP/Control_module/inc/ModbusTypes.h
     APP/Control_module/inc/DeviceState.h
     APP/Control_module/inc/DeviceStatusObject.h
+    APP/Net/inc/LabKeyClient.h
+    APP/Net/inc/LabKeyService.h
+    APP/Net/inc/TaskQueueWorker.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
@@ -209,7 +216,7 @@ target_include_directories(FluorescenceQuant PRIVATE
     ${CMAKE_SOURCE_DIR}/APP/sqlite/VM/inc
     ${CMAKE_SOURCE_DIR}/APP/sqlite/Repo/inc
     ${CMAKE_SOURCE_DIR}/APP
-    ${CMAKE_SOURCE_DIR}/APP/Net
+    ${CMAKE_SOURCE_DIR}/APP/Net/inc
     ${CMAKE_SOURCE_DIR}/APP/Control_module/inc
 )
 

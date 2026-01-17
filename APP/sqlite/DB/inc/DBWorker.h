@@ -44,6 +44,10 @@ public:
     Q_INVOKABLE void postDeleteHistory(int id);
     Q_INVOKABLE void postExportHistory(const QString& csvPath);
     Q_INVOKABLE void postInsertProjectInfo(const QVariantMap& info);
+    //
+    Q_INVOKABLE void postLookupQrMethodConfig(const QString& qrText);
+    Q_INVOKABLE void postSaveQrMethodConfig(const QVariantMap& cfg);
+
 signals:
     void ready();
     void errorOccurred(const QString& msg);
@@ -70,6 +74,9 @@ signals:
     void historyInserted(bool ok);
     void historyDeleted(bool ok, int id);
     void historyExported(bool ok, const QString& path);
+    // === 二维码识别===
+    void qrMethodConfigLookedUp(const QVariantMap& result);  // ✅ 查询完成回调：result 里带 ok / error / 字段
+    void saveQrMethodConfigDone(bool ok, const QString& err);
 
 private:
     // === 内部逻辑 ===
@@ -94,6 +101,8 @@ private:
     bool insertHistoryInternal(const HistoryRow& row);
     bool deleteHistoryInternal(int id);
     bool exportHistoryInternal(const QString& csvPath);
+    // === 二维码识别===
+    bool lookupQrMethodConfigInternal(const QString& qrText, QVariantMap& out);  // ✅ 内部：查 qr_method_config
 
 private:
     QString dbPath_;

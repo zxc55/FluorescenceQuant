@@ -2,10 +2,10 @@
 
 #include <QDebug>
 
-// QrScanner.cpp
 QrScanner::QrScanner(QObject* parent)
     : QObject(parent) {
     m_worker = new DecodeWorker([this](const QString& text) {
+        qDebug() << "[QrScanner] qrDecoded" << text;
         emit qrDecoded(text);
     });
 

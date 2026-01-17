@@ -16,7 +16,6 @@
 #include "APP/MyQmlComponents/MyLineSeries/MyLineSeries.h"
 #include "APP/MyQmlComponents/MyPlotView/PlotView.h"
 #include "APP/MyQmlComponents/MySeriesFeeder/SeriesFeeder.h"
-#include "APP/Net/HttpWorker.h"
 // 工程组件
 #include "CardWatcherStd.h"
 #include "DecodeWorker.h"
@@ -41,9 +40,14 @@
 #include "APP/Scanner/QrScanner.h"
 #include "DeviceManager.h"
 // 状态对象
+#include <QJsonDocument>
+
 #include "DeviceService.h"
 #include "DeviceStatusObject.h"
-
+#include "LabKeyClient.h"
+#include "LabKeyService.h"
+#include "QrRepoModel.h"
+#include "TaskQueueWorker.h"
 static bool ensureDir(const QString& path) {
     QDir d;
     return d.exists(path) ? true : d.mkpath(path);
@@ -138,9 +142,6 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<MyLineSeries>("App", 1, 0, "MyLineSeries");
     qmlRegisterType<CurveLoader>("App", 1, 0, "CurveLoader");
     qmlRegisterType<DeviceService>("App", 1, 0, "DeviceService");
-    // HttpWorker http;
-    // http.start();
-    // http.enqueueGet("https://jsonplaceholder.typicode.com/posts/1");
     // ======================
     // DB 路径
     // ======================
@@ -152,6 +153,60 @@ int main(int argc, char* argv[]) {
 
     ensureDir(dbDir);
     QString dbPath = dbDir + "/app.db";
+
+    /* 1. 启动后台任务线程 */
+    TaskQueueWorker worker;
+    worker.start();
+
+    /* 2. 创建 LabKey libcurl 客户端
+     *   - 不继承 QObject
+     *   - 不存在线程亲缘性问题
+     *   - 可以安全放在 std::thread 里使用
+     */
+    auto* labkey = new LabKeyClientCurl(
+        "https://lims.pribolab.net:13101",
+        "/QuantitativeFluorescence",
+        "Basic YXBpa2V5OmQ3NzNlOTNiZDI0NGJmMDA5MzU0MWQzZDY4YWNiMjU2ODA5NGJmNjA3ZjMxNzdiNmZkYjBiZjQ0NjBlMzQ5MjM=",
+        "/tmp/labkey_cookie.txt"  // cookie 文件，等价 curl -c / -b
+    );
+
+    // /* 3. 投递 LabKey 任务到后台线程 */
+    // worker.pushTask([labkey]() {
+    //     qDebug() << "[TASK] LabKey start";
+
+    //     std::string err;
+    //     std::string csrf;
+    //     QJsonObject json;
+
+    //     /* 3.1 获取 CSRF Token */
+    //     if (!labkey->fetchToken(csrf, err)) {
+    //         qWarning() << "[TASK] fetchToken failed:" << err.c_str();
+    //         return;
+    //     }
+
+    //     qDebug() << "[TASK] CSRF =" << csrf.c_str();
+
+    //     /* 3.2 获取 MethodLibrary */
+    //     if (!labkey->fetchMethodLibrary("test", "1", json, err)) {
+    //         qWarning() << "[TASK] fetchMethodLibrary failed:" << err.c_str();
+    //     } else {
+    //         qDebug() << "[TASK] MethodLibrary:";
+    //         qDebug().noquote()
+    //             << QJsonDocument(json).toJson(QJsonDocument::Indented);
+    //     }
+
+    //     /* 3.3 上传实验数据（失败自动刷新 CSRF 再试） */
+    //     if (!labkey->uploadRunWithRetry("/root/labkey_test/data.json",
+    //                                     json, err)) {
+    //         qWarning() << "[TASK] uploadRun failed:" << err.c_str();
+    //     } else {
+    //         qDebug() << "[TASK] uploadRun success:";
+    //         qDebug().noquote()
+    //             << QJsonDocument(json).toJson(QJsonDocument::Indented);
+    //     }
+
+    //     qDebug() << "[TASK] LabKey finished";
+    // });
 
     // ======================
     // 卡检测 KeysProxy
@@ -174,7 +229,7 @@ int main(int argc, char* argv[]) {
     // ======================
     QThread* dbThread = new QThread();
     DBWorker* db = new DBWorker(dbPath);
-
+    //   db->initialize();
     db->moveToThread(dbThread);
     QObject::connect(dbThread, &QThread::started, db, &DBWorker::initialize);
     QObject::connect(dbThread, &QThread::finished, db, &DBWorker::deleteLater);
@@ -189,6 +244,7 @@ int main(int argc, char* argv[]) {
     ProjectsViewModel projectsVm(db);
     HistoryViewModel historyVm(db);
     PrinterDeviceController printerCtrl(&settingsVm);
+    QrRepoModel* qrRepoModel = new QrRepoModel(db);
     // ==== 绑定 DB ====
     settingsVm.bindWorker(db);
     userVm.bindWorker(db);
@@ -213,6 +269,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(db, &DBWorker::settingsLoaded,
                      &settingsVm, &SettingsViewModel::onSettingsLoaded,
                      Qt::QueuedConnection);
+    LabKeyService labkeyService;
     // ======================
     // 加载 QSS
     // ======================
@@ -233,6 +290,9 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("qrScanner", &qrScanner);
     engine.rootContext()->setContextProperty("printerCtrl", &printerCtrl);
     engine.rootContext()->setContextProperty("deviceService", deviceMgr->service());
+    engine.rootContext()->setContextProperty("dbWorker", qrRepoModel);
+    engine.rootContext()->setContextProperty("labkeyService", &labkeyService);
+    engine.addImageProvider("qr", new QrImageProvider(&qrScanner));
 
     QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(

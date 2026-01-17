@@ -113,8 +113,13 @@ bool V4L2MjpegGrabber::initMmap() {
     req.count = 4;
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.memory = V4L2_MEMORY_MMAP;
+    if (req.count < 2) {
+        qCritical() << "REQBUFS returned too few buffers:" << req.count;
+        return false;
+    }
     if (xioctl(m_fd, VIDIOC_REQBUFS, &req) == -1) {
         qWarning() << "VIDIOC_REQBUFS failed";
+
         return false;
     }
     m_buffers.resize(req.count);

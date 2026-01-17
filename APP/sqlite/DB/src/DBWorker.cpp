@@ -12,9 +12,9 @@
 #include "HistoryRepo.h"
 #include "Migrations.h"
 #include "ProjectsRepo.h"
+#include "QrRepo.h"
 #include "SettingsRepo.h"
 #include "UsersRepo.h"
-
 DBWorker::DBWorker(const QString& dbPath, QObject* parent)
     : QObject(parent), dbPath_(dbPath) {}
 
@@ -110,6 +110,26 @@ void DBWorker::initialize() {
             case DBTaskType::ExportHistory:
                 emit historyExported(exportHistoryInternal(task.s1), task.s1);
                 break;
+            case DBTaskType::LookupQrMethodConfig: {
+                QVariantMap out;                                       // 输出
+                bool ok = lookupQrMethodConfigInternal(task.s1, out);  // ✅ 内部函数做解析+查库
+                out.insert("ok", ok);                                  // 回填 ok（保险）
+                emit qrMethodConfigLookedUp(out);                      // 发信号给 UI
+                break;
+            }
+            case DBTaskType::UpsertQrMethodConfig: {
+                QString err;
+                QSqlDatabase db = QSqlDatabase::database(connName_);
+                bool ok = QrRepo::upsert(db, task.info);  // task.info 就是 cfg
+
+                if (!ok) {
+                    err = "写入方法配置失败";
+                    qWarning() << "[DBWorker] upsert failed" << task.info;
+                }
+
+                emit saveQrMethodConfigDone(ok, err);
+                break;
+            }
             default:
                 qWarning() << "[DB] unknown task:" << int(task.type);
                 break;
@@ -122,7 +142,12 @@ void DBWorker::initialize() {
 }
 
 // === 外部任务接口 ===
-
+void DBWorker::postLookupQrMethodConfig(const QString& qrText)  // ✅ 投递“查二维码配置”任务
+{
+    std::lock_guard<std::mutex> lk(m_);             // 加锁保护队列
+    q_.push(DBTask::lookupQrMethodConfig(qrText));  // 入队任务
+    cv_.notify_one();                               // 唤醒 worker 线程
+}
 void DBWorker::postEnsureAllSchemas() {
     std::lock_guard<std::mutex> lk(m_);
     q_.push(DBTask{DBTaskType::EnsureAllSchemas});
@@ -280,6 +305,11 @@ bool DBWorker::deleteHistoryInternal(int id) {
     QSqlDatabase db = QSqlDatabase::database(connName_);
     return HistoryRepo::deleteById(db, id);
 }
+bool DBWorker::lookupQrMethodConfigInternal(const QString& qrText, QVariantMap& out)  // ✅ 查二维码配置（内部）
+{
+    QSqlDatabase db = QSqlDatabase::database(connName_);  // 取本线程连接
+    return QrRepo::existsByQrText(db, qrText, out);
+}
 bool DBWorker::exportHistoryInternal(const QString& csvPath) {
     QSqlDatabase db = QSqlDatabase::database(connName_);
     QVector<HistoryRow> rows;
@@ -306,5 +336,10 @@ bool DBWorker::exportHistoryInternal(const QString& csvPath) {
 void DBWorker::postInsertProjectInfo(const QVariantMap& info) {
     std::lock_guard<std::mutex> lk(m_);
     q_.push(DBTask::insertProjectInfo(info));
+    cv_.notify_one();
+}
+void DBWorker::postSaveQrMethodConfig(const QVariantMap& cfg) {
+    std::lock_guard<std::mutex> lk(m_);
+    q_.push(DBTask::upsertQrMethodConfig(cfg));
     cv_.notify_one();
 }

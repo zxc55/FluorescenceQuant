@@ -288,13 +288,9 @@ Timer {
 }
 function startTest() {
     console.log("▶ 请求开始检测")
-
-  
     console.log("当前 motor_state =", motor_state)
 
     if (motor_state !== 4) {
-        console.log("⏳ 电机未就绪，等待 motorState == 5")
-
         // 可选 UI 提示
         overlayText = "电机准备中，请稍候..."
         overlayBusy = true
@@ -303,8 +299,6 @@ function startTest() {
         waitMotorReadyTimer.start()
         return
     }
-
-    // 如果已经是 5，直接开始
     doStartTest()
 }
 Timer {
@@ -525,33 +519,7 @@ function doStartTestInternal()
                             overlayVisible = true
                             deviceService.motorStart()
                             console.log("---------检测中---------")
-                            startTest()
-                            // var forwardCheck = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true; }', win)
-                            // forwardCheck.triggered.connect(function() {
-                            //     var status = motor.readRegister(0xF1)
-                            //     console.log("⚙️ 电机状态 0xF1 =", status)
-                            //     if (status === 1) {
-                            //         forwardCheck.stop()
-                            //         console.log("✅ 前进完成，开始回原点")
-                            //         overlayText = "返回原点中..."
-                            //         motor.back()
-                            //         var backTimer = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:500; repeat:true; }', win)
-                            //         backTimer.triggered.connect(function() {
-                            //             var val2 = motor.readRegister(0x34)
-                            //             console.log("📖 寄存器 0x34 =", val2)
-                            //             if (val2 === 1) {
-                            //                 backTimer.stop()
-                            //                 console.log("✅ 已回原点，准备开始检测")
-                            //                 overlayText = "准备检测中..."
-                            //                 overlayBusy = true
-                            //                 overlayVisible = true
-                            //                 startTest()   // ✅ 只在这里启动一次
-                            //             }
-                            //         })
-                            //         backTimer.start()
-                            //     }
-                            // })
-                           //  forwardCheck.start()
+                            startTest()                        
                         }          
                     }
                 background: Rectangle {
@@ -929,7 +897,7 @@ function doStartTestInternal()
                                 Button { text: "刷新"; onClicked: projectsVm.refresh() }
                                 Button {
                                             text: "扫描二维码"
-                                            onClicked: scanPage.visible = true
+                                            onClicked: scanPage.visible = true                                     
                                            }
                                     Button {
                                         text: "删除"
@@ -1476,7 +1444,7 @@ function doStartTestInternal()
                                                 Rectangle { width: historyPage.w_ref;      height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: Number(referenceValue).toFixed(2) } }
                                                 Rectangle {
                                                     width: historyPage.w_res; height: parent.height; color: "transparent"
-                                                    Text { anchors.centerIn: parent; text: result; color: result === "合格" ? "green" : "red" }
+                                                    HeaderText { anchors.centerIn: parent; text: result; color: result === "合格" ? "green" : "red" }
                                                 }
                                                 Rectangle { width: historyPage.w_time;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: detectedTime } }
                                                 Rectangle { width: historyPage.w_unit;     height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: detectedUnit } }

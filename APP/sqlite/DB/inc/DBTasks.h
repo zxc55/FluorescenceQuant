@@ -20,7 +20,9 @@ enum class DBTaskType {
     InsertHistory,
     DeleteHistory,
     ExportHistory,
-    InsertProjectInfo
+    InsertProjectInfo,
+    LookupQrMethodConfig,
+    UpsertQrMethodConfig
 };
 
 struct DBTask {
@@ -130,6 +132,18 @@ struct DBTask {
         DBTask t;
         t.type = DBTaskType::InsertProjectInfo;
         t.info = m;  // 使用你已有的 info 字段
+        return t;
+    }
+    static DBTask lookupQrMethodConfig(const QString& qrText) {  // ✅ 新增：查二维码配置任务构造器
+        DBTask t;                                                // 创建任务对象
+        t.type = DBTaskType::LookupQrMethodConfig;               // 设置任务类型
+        t.s1 = qrText;                                           // s1 存二维码字符串
+        return t;                                                // 返回任务
+    }
+    static DBTask upsertQrMethodConfig(const QVariantMap& cfg) {
+        DBTask t;
+        t.type = DBTaskType::UpsertQrMethodConfig;
+        t.info = cfg;  // 复用 info 字段承载 cfg
         return t;
     }
 };
