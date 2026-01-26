@@ -56,48 +56,8 @@ ApplicationWindow {
     Component.onCompleted: {
         VirtualKeyboardSettings.activeLocales = ["en_US", "zh_CN"]
         VirtualKeyboardSettings.locale = "zh_CN"
-        // motor.start()
-        
-        // zeroHomeTimer.start()
-
-        // // 👉 延时再执行 motor.back()
-        // delayBackTimer.start()
     }
 
-    // Timer {
-    //     id: delayBackTimer
-    //     interval: 5000  // 延迟 1.5 秒，按需修改1000~3000都可以
-    //     repeat: false
-    //     onTriggered: {
-    //         console.log(">> 延时执行 motor.back()")
-    //         motor.back()
-    //     }
-    // }
-
-    // Timer {
-    //     id: zeroHomeTimer
-    //     interval: 3000
-    //     repeat: true
-    //     running: false
-       
-    //     onTriggered: {
-    //         var val = motor.readRegister(0x34)
-    //         console.log("🔍 原点状态 0x34 =", val)
-
-    //         if (val === 1) {
-    //             zeroHomeTimer.stop()
-    //             console.log("🎉 回原点成功 → 2 秒后执行 motor.runPosition")
-
-    //             var t = Qt.createQmlObject('import QtQuick 2.0; Timer { interval:2000; repeat:false }', win)
-    //             t.triggered.connect(function() {
-    //                 console.log("🚀 开始运行 motor.runPosition")
-    //                 motor.runPosition(1, 0, 150, 59000)
-    //                 t.destroy()  // 清理 Timer
-    //             })
-    //             t.start()   // ★★ 必须启动
-    //         }
-    //     }
-    // }
     Connections {
         target: userVm
 
@@ -276,7 +236,7 @@ Timer {
 
     onTriggered: {
        
-        console.log("[MotorCheck] motorState =", motor_state)
+      //  console.log("[MotorCheck] motorState =", motor_state)
 
         if (motor_state === 4) {   // ✅ 电机就绪
             console.log("✅ 电机状态=5，开始检测")
@@ -320,7 +280,16 @@ Timer {
     }
 }
 function doStartTest() {
-    // === 启动 ADS1115 连续采集 ===
+    // === 启动 ADS1115 连续采集 ===]
+      var curNo = tfSampleId.text
+        // ① 如果和上一次一样 → 重新生成
+    if (curNo === lastSampleNo) {
+        console.log("⚠️ 样品编号重复，重新生成")
+
+        var newNo = mainViewModel.generateSampleNo()
+        tfSampleId.text = newNo
+        curNo = newNo
+    }
     mainViewModel.setCurrentSample(tfSampleId.text)
     mainViewModel.startReading()
     console.log("🧪[" + nowStr() + "] 启动连续采集")
@@ -338,7 +307,7 @@ function doStartTestInternal()
 
     // === 回原点 ===
     uvadcList = mainViewModel.getAdcData(tfSampleId.text)
-    var res = mainViewModel.calcTC(uvadcList)          // 调用 C++ 函数
+    var res = mainViewModel.calcTC(uvadcList,projectPage.selectedId)          // 调用 C++ 函数
 
     var curNo = tfSampleId.text
         // ① 如果和上一次一样 → 重新生成
@@ -357,10 +326,10 @@ function doStartTestInternal()
     // === 读取界面输入信息 ===
     var sampleNo = tfSampleId.text          // 样品编号
     var projectId = projectPage.selectedId       
-    var projectName = projectsVm.getNameById(projectId)   // ★ 获取项目名称
+    var projectName = qrMethodConfigVm.getProjectNameById(projectId)   // ★ 获取项目名称
     var source   = tfSampleSource.text      // 样品来源
     var name     = tfSampleName.text        // 样品名称
-    var batch    = projectsVm.getBatchById(projectPage.selectedId) // 批次编码
+    var batch    = qrMethodConfigVm.getBatchCodeById(projectPage.selectedId) // 批次编码
     var curve    = standardCurveBox.currentText  // 标准曲线
     var conc     = Number(res.concentration || 0)                        // 检测浓度
     var ref      = parseFloat(refValueField.text || 0)  // 参考值
@@ -387,7 +356,26 @@ function doStartTestInternal()
                 "detectedPerson": person,
                 "dilutionInfo": dilution 
                 }
+            var uploadRecord = {
+                // ===== root =====
+                "assayId": 1,                // 固定
+                "name": "1",                 // 固定或 sampleNo
 
+                // ===== dataRows 内的一行 =====
+                "company": "p",              // 固定
+                "sample": sampleNo,          // 样品编号
+                "T_Value": 1,                // 你现在要求默认 1
+                "C_Value": 1,                // 默认 1
+                "T/C": res.ratioTC || 0,     // ★ 来自 calcTC
+                "concentration": res.concentration || 0, // ★
+                "result": res.resultStr || "",            // ★ 阳性 / 阴性
+                "date": Qt.formatDate(new Date(), "yyyy-MM-dd"),
+                "project": projectName,      // 方法名
+                "serial": batch,             // 批次编码
+                "CurveFormula": "1",         // 默认
+                "DilutionFactor": Number(dilution)
+            }
+        labkeyService.uploadRun(uploadRecord)
         console.log("[DEBUG] 即将写入数据库:", JSON.stringify(record))
 
         // === 写入数据库 ===
@@ -498,29 +486,25 @@ function doStartTestInternal()
                     padding: 0
                     onClicked:{ 
                             if (!deviceService.status.cardHome) {
-                                        overlayText = "请检查检测卡位置"
-                                        overlayBusy = false
-                                        overlayVisible = true
-                                        return
-                                    }                           
-                        console.log("检测插卡后 → 检查电机原点状态")
-                        var val = deviceService.status.powerOnHome
-                        console.log("上电原点值:", val)
-                        if (!val) {
-                            // overlayText = "电机未在原点，正在回原点..."
-                            // overlayBusy = true
-                            // overlayVisible = true
-                            // motor.back()
-                            // originCheckTimer.start()
-                            return
-                        } else{
+                                overlayText = "请检查检测卡位置"
+                                overlayBusy = false
+                                overlayVisible = true
+                                return
+                            }
+                            if(projectPage.selectedId === -1){
+                                overlayText = "请选择项目"
+                                overlayBusy = false
+                                overlayVisible = true
+                                return
+                            }                           
+                            console.log("检测插卡后 → 检查电机原点状态")
                             overlayText = "电机运行中..."
                             overlayBusy = true
                             overlayVisible = true
                             deviceService.motorStart()
                             console.log("---------检测中---------")
                             startTest()                        
-                        }          
+                              
                     }
                 background: Rectangle {
                             anchors.fill: parent; radius: 10
@@ -798,8 +782,8 @@ function doStartTestInternal()
                                             spacing: 8
 
                                             Label { text: ""; width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                                            Label { text: projectsVm.getNameById(projectPage.selectedId); width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                                            Label { text: projectsVm.getBatchById(projectPage.selectedId); width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                            Label { text: qrMethodConfigVm.getProjectNameById(projectPage.selectedId); width: 150; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                            Label { text: qrMethodConfigVm.getBatchCodeById(projectPage.selectedId); width: 200; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
                                             Label { text: Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm"); width: 300; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
                                         }
                                     }
@@ -877,8 +861,10 @@ function doStartTestInternal()
                     // ===== 1 项目管理（带滑动表格） =====
                     Item {
                         id: projectPage
-                        property int selectedId: 1 // 当前选中行
-
+                        property int selectedId: -1 // 当前选中行
+                        onSelectedIdChanged: {
+                                console.log("[QrMethodConfig] global selectedId =", selectedId)
+                            }
                         ColumnLayout {
                             anchors.fill: parent
                             spacing: 12
@@ -894,7 +880,7 @@ function doStartTestInternal()
                                     color: textMain
                                 }
                                 Item { Layout.fillWidth: true }
-                                Button { text: "刷新"; onClicked: projectsVm.refresh() }
+                                Button { text: "刷新"; onClicked: qrMethodConfigVm.refresh() }
                                 Button {
                                             text: "扫描二维码"
                                             onClicked: scanPage.visible = true                                     
@@ -912,9 +898,9 @@ function doStartTestInternal()
 
                                             if (projectPage.selectedId > 0) {
                                                 console.log("执行删除 → ID =", projectPage.selectedId)
-                                                projectsVm.deleteById(projectPage.selectedId)
+                                                qrMethodConfigVm.deleteById(projectPage.selectedId)
                                                 projectPage.selectedId = -1
-                                                projectsVm.refresh()
+                                                qrMethodConfigVm.refresh()
                                             }
                                         }
                                     }
@@ -1029,7 +1015,7 @@ function doStartTestInternal()
                                         // === 数据行 ===
                                         Repeater {
                                             id: dataRepeater
-                                            model: projectsVm
+                                            model: qrMethodConfigVm
 
                                             delegate: Rectangle {
                                                 width: parent.width
@@ -1092,7 +1078,7 @@ function doStartTestInternal()
                                                         color: "transparent"
                                                         Label {
                                                             anchors.centerIn: parent
-                                                            text: name
+                                                            text: projectName
                                                             color: textMain
                                                             font.bold: true
                                                             elide: Label.ElideRight
@@ -1106,7 +1092,7 @@ function doStartTestInternal()
                                                         color: "transparent"
                                                         Label {
                                                             anchors.centerIn: parent
-                                                            text: batch
+                                                            text: batchCode
                                                             color: textMain
                                                             font.bold: true
                                                             elide: Label.ElideRight
@@ -1279,10 +1265,10 @@ function doStartTestInternal()
                                     Button {
                                         text: "导出 CSV"
                                         onClicked: {
-                                            let name = "history_" + new Date().toLocaleString().replace(/[ :\/]/g, "_") + ".csv"
-                                            let filePath = "/mnt/SDCARD/export/" + name
-                                            historyVm.exportCsv(filePath)
-                                            console.log("[CSV] 导出:", filePath)
+                                            // let name = "history_" + new Date().toLocaleString().replace(/[ :\/]/g, "_") + ".csv"
+                                            // let filePath = "/mnt/SDCARD/export/" + name
+                                            // historyVm.exportCsv(filePath)
+                                            // console.log("[CSV] 导出:", filePath)
                                         }
                                     }
                                     // ✅ 新增：详细信息按钮

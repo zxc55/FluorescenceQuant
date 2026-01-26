@@ -31,18 +31,36 @@ Item {
     }
 
     // ========================= 加载曲线 =========================
-    function loadCurve() {
+function loadCurve() {
+        
+        console.log("[CURVE] loadCurve sampleNo =", record.sampleNo)
+
         adcList = mainViewModel.getAdcData(record.sampleNo)
+
+        console.log("[CURVE] adcList length =", adcList ? adcList.length : -1)
+
+        // ⚠️ 强烈建议加这个，否则你现在的 inf 报错还会继续
+        if (!adcList || adcList.length === 0) {
+            console.log("[CURVE] adcList empty, skip draw")
+            axisY.min = 0
+            axisY.max = 1
+            return
+        }
+
         yMin = Math.min.apply(null, adcList)
         yMax = Math.max.apply(null, adcList)
 
+        console.log("[CURVE] yMin =", yMin, "yMax =", yMax)
+
         axisY.min = yMin
         axisY.max = yMax
+
         feeder.buildAndReplace(adcList)
+
         root.visible = false
         root.visible = true
-       // chart.update()
-    }
+}
+    
 
     // ========================= 顶部栏 =========================
     Rectangle {
@@ -88,7 +106,7 @@ Item {
         ValueAxis {
             id: axisX
             min: 0
-            max: adcList.length > 0 ? adcList.length : 500
+            max: adcList.length > 0 ? adcList.length : 5000
             tickCount: 10
             titleText: "数据点"
             

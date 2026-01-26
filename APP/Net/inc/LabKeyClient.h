@@ -2,9 +2,10 @@
 #define LABKEYCLIENT_H_
 
 #include <QJsonObject>
+#include <QObject>
+#include <QVariantMap>
 #include <mutex>
 #include <string>
-
 class LabKeyClientCurl {
 public:
     LabKeyClientCurl(const std::string& baseUrl,
@@ -13,9 +14,12 @@ public:
                      const std::string& cookieFile);
 
     bool fetchToken(std::string& outCsrf, std::string& err);
-    bool uploadRunWithRetry(const std::string& jsonFile,
-                            QJsonObject& outResp,
-                            std::string& err);
+    bool uploadRun(const QVariantMap& record,
+                   int* httpStatus,
+                   QString* rawResp,
+                   QString* err,
+                   QString* outJson);
+
     bool fetchMethodLibrary(const std::string& type,
                             const std::string& serial,
                             QJsonObject& outResp,
@@ -40,4 +44,4 @@ private:
     std::mutex m_mutex;
 };
 
-#endif  // LABKEYCLIENT_H_
+#endif  // LABKEYCLIENT

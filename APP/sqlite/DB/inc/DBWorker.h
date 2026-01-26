@@ -12,7 +12,18 @@
 #include "DBTasks.h"
 #include "DTO.h"
 #include "HistoryRepo.h"
-
+struct QrMethodConfigRow  // DB 返回行结构体（对标 ProjectRow）
+{
+    int id = 0;           // 表主键 id
+    QString projectName;  // projectName
+    QString batchCode;    // batchCode
+    QString updatedAt;
+    int C1 = 0;  // C1
+    int T1 = 0;  // T1
+    int C2 = 0;  // C2
+    int T2 = 0;  // T2
+    QString methodData;
+};
 class DBWorker : public QObject {
     Q_OBJECT
 public:
@@ -78,6 +89,9 @@ signals:
     void qrMethodConfigLookedUp(const QVariantMap& result);  // ✅ 查询完成回调：result 里带 ok / error / 字段
     void saveQrMethodConfigDone(bool ok, const QString& err);
 
+    void qrMethodConfigsLoaded(const QVector<QrMethodConfigRow>& rows);  // 加载完成信号
+    void qrMethodConfigDeleted(bool ok, int id);                         // 删除完成信号
+
 private:
     // === 内部逻辑 ===
     void threadLoop();
@@ -103,7 +117,14 @@ private:
     bool exportHistoryInternal(const QString& csvPath);
     // === 二维码识别===
     bool lookupQrMethodConfigInternal(const QString& qrText, QVariantMap& out);  // ✅ 内部：查 qr_method_config
-
+public slots:
+    void postLoadQrMethodConfigs();                              // 对外：投递加载任务（你项目里一般用 invokeMethod）
+    void postDeleteQrMethodConfig(int id);                       // 对外：投递删除任务
+    void postInsertQrMethodConfigInfo(const QVariantMap& info);  // 对外：投递插入任务
+private slots:
+    void doLoadQrMethodConfigs();                              // 真正执行 SQL 的函数（在 DB 线程）
+    void doDeleteQrMethodConfig(int id);                       // 真正执行删除
+    void doInsertQrMethodConfigInfo(const QVariantMap& info);  // 真正执行插入
 private:
     QString dbPath_;
     QString connName_;

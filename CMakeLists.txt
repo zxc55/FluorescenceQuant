@@ -135,6 +135,7 @@ set(SOURCES
     APP/sqlite/Repo/src/UsersRepo.cpp
     APP/sqlite/VM/src/SettingsViewModel.cpp
     APP/sqlite/VM/src/UserViewModel.cpp
+    APP/sqlite/VM/src/QrMethodConfigViewModel.cpp
     APP/sqlite/Repo/src/ProjectsRepo.cpp
     APP/sqlite/VM/src/ProjectsViewModel.cpp
     APP/sqlite/VM/src/HistoryViewModel.cpp
@@ -178,6 +179,7 @@ set(HEADERS
     APP/sqlite/VM/inc/UserViewModel.h
     APP/sqlite/Repo/inc/ProjectsRepo.h
     APP/sqlite/VM/inc/ProjectsViewModel.h
+    APP/sqlite/VM/inc/QrMethodConfigViewModel.h
     APP/sqlite/VM/inc/HistoryViewModel.h
     APP/sqlite/Repo/inc/HistoryRepo.h
     APP/MyQmlComponents/MyLineSeries/MyLineSeries.h

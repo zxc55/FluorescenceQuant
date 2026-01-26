@@ -11,6 +11,7 @@
 #include <QVector>
 #include <mutex>
 
+#include "QrMethodConfigViewModel.h"
 class IIODeviceController;
 
 class MainViewModel : public QObject {
@@ -18,15 +19,15 @@ class MainViewModel : public QObject {
 public:
     explicit MainViewModel(QObject* parent = nullptr);
     ~MainViewModel();
-    Q_INVOKABLE QVariantMap calcTC(const QVariantList& adcList);
-    Q_INVOKABLE QVariantMap calcTC_FixedWindow(const QVariantList& adcList);
+    Q_INVOKABLE QVariantMap calcTC(const QVariantList& adcList, int id);
+    // Q_INVOKABLE QVariantMap calcTC_FixedWindow(const QVariantList& adcList);
     struct FourPLParams {
         double A;  // 曲线高端（低浓度）
         double B;  // 斜率
         double C;  // 中点浓度
         double D;  // 曲线低端（高浓度）
     };
-
+    void setMethodConfigVm(QrMethodConfigViewModel* vm);
 public slots:
     void startReading();
     void stopReading();
@@ -54,7 +55,7 @@ private:
     QThread dbThread_;
     std::mutex queueMutex_;
     QQueue<QVector<double>> writeQueue_;  // 等待写入队列
-
+    QrMethodConfigViewModel* m_methodVm = nullptr;
     void dbWriterLoop();  // 数据库后台写入函数
 };
 

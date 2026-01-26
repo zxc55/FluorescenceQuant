@@ -5,7 +5,15 @@
 
 #include <QDebug>
 #include <QThread>
-
+static inline bool isModbusProtocolExceptionErrno(int e) {
+#ifdef EMBXILFUN
+    // 从机异常响应：Illegal function/address/value、Slave failure、Gateway target fail 等
+    if (e == EMBXILFUN || e == EMBXILADD || e == EMBXILVAL ||
+        e == EMBXSFAIL || e == EMBXGTAR)
+        return true;
+#endif
+    return false;
+}
 ModbusRtuClient::ModbusRtuClient(QObject* parent)
     : QObject(parent) {
     // open();
@@ -47,7 +55,12 @@ bool ModbusRtuClient::open() {
         close();
         return false;
     }
+    // 建议：清掉串口残留脏数据，避免第一帧就 CRC/帧错
+    modbus_flush(m_ctx);
 
+    // 建议：超时放大一点，先跑通再优化
+    modbus_set_response_timeout(m_ctx, 1, 0);  // 1s
+    modbus_set_byte_timeout(m_ctx, 1, 0);      // 1s
     qDebug() << "[MODBUS] connected";
     m_connected = true;
     emit connectionStateChanged(true);
@@ -76,7 +89,7 @@ bool ModbusRtuClient::reconnect() {
 }
 
 bool ModbusRtuClient::writeMulti(const QVector<RegWriteBlock>& blocks) {
-    usleep(1000 * 50);
+    usleep(1000 * 100);
     QMutexLocker locker(&m_ioMutex);
 
     if (!ensureConnected())
@@ -91,7 +104,7 @@ bool ModbusRtuClient::writeMulti(const QVector<RegWriteBlock>& blocks) {
     return true;
 }
 bool ModbusRtuClient::readMulti(QVector<RegReadBlock>& blocks) {
-    usleep(1000 * 50);
+    usleep(1000 * 100);
     QMutexLocker locker(&m_ioMutex);
 
     if (!m_connected) {
@@ -131,23 +144,51 @@ bool ModbusRtuClient::readMulti(QVector<RegReadBlock>& blocks) {
 
 bool ModbusRtuClient::writeRegisters(uint16_t addr,
                                      const QVector<uint16_t>& values) {
-    usleep(1000 * 50);
-    int rc = modbus_write_registers(
-        m_ctx,
-        addr,
-        values.size(),
-        values.data());
+    usleep(1000 * 100);
 
-    if (rc != values.size()) {
-        emit ioError(modbus_strerror(errno));
+    if (!m_ctx) {
+        emit ioError("modbus ctx is null");
         m_connected = false;
         return false;
     }
-    return true;
-}
 
+    if (values.isEmpty()) {
+        // 你也可以 return false；我这里按“空写无意义”处理为失败
+        emit ioError("writeRegisters: values empty");
+        return false;
+    }
+
+    // 单从站场景也建议每次写前 set_slave，避免你后面扩展多从站踩坑
+    modbus_set_slave(m_ctx, m_slaveId);
+
+    const int nb = values.size();
+    const int rc = modbus_write_registers(m_ctx, int(addr), nb, values.constData());
+
+    if (rc == nb) {
+        return true;
+    }
+
+    const int e = errno;
+    const char* es = modbus_strerror(e);
+
+    qWarning() << "[MODBUS] write failed"
+               << "slave=" << m_slaveId
+               << "addr=" << addr
+               << "count=" << nb
+               << "rc=" << rc
+               << "errno=" << e
+               << "err=" << es;
+
+    emit ioError(QString::fromLocal8Bit(es));
+
+    // 关键：协议异常不等于断线
+    if (!isModbusProtocolExceptionErrno(e)) {
+        m_connected = false;
+    }
+    return false;
+}
 bool ModbusRtuClient::readRegisters(uint16_t addr, uint16_t count, QVector<uint16_t>& out) {
-    usleep(1000 * 50);
+    usleep(1000 * 100);
     out.resize(count);  // 先把输出数组扩到需要的寄存器数量
 
     int rc = modbus_read_registers(m_ctx, addr, count, out.data());  // 03 功能码读保持寄存器
@@ -178,7 +219,7 @@ bool ModbusRtuClient::readRegisters(uint16_t addr, uint16_t count, QVector<uint1
     return true;  // 成功返回 true
 }
 bool ModbusRtuClient::readBlock(uint16_t addr, uint16_t count, QVector<uint16_t>& out) {
-    usleep(1000 * 50);
+    usleep(1000 * 100);
     QMutexLocker locker(&m_ioMutex);  // 加锁，保证串口互斥
 
     if (!m_connected) {    // 如果当前未连接
@@ -254,10 +295,18 @@ void ModbusRtuClient::postWriteRegisters(uint16_t addr,
             Qt::QueuedConnection);
         return;
     }
+    usleep(1000 * 100);
+    // 必须串口互斥：避免与 writeMulti/readMulti/readBlock 并发
+    QMutexLocker locker(&m_ioMutex);
 
-    // ★ 真正的同步写（私有）
-    bool ok = writeRegisters(addr, regs);
+    if (!ensureConnected()) {
+        qWarning() << "[MODBUS] writeRegisters ensureConnected failed";
+        return;
+    }
+
+    const bool ok = writeRegisters(addr, regs);
     qDebug() << "[MODBUS] writeRegisters addr=" << addr
              << "count=" << regs.size()
+             << "slave=" << m_slaveId
              << "ok=" << ok;
 }

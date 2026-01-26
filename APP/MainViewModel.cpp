@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <algorithm>  // std::sort
@@ -12,30 +13,26 @@
 #include <thread>
 
 #include "IIODeviceController.h"
+
 #define PEAK_NEIGHBOR 3
 MainViewModel::FourPLParams stdCurve;
+void MainViewModel::setMethodConfigVm(QrMethodConfigViewModel* vm) {
+    m_methodVm = vm;
+    qInfo() << "[MainVM] methodVm set =" << vm;
+}
 static double fourPL_inverse(double y, const MainViewModel::FourPLParams& p) {
     const double eps = 1e-9;
 
-    // double A = p.A;
-    // double B = p.B;
-    // double C = p.C;
-    // double D = p.D;
+    // 防御式检查（双保险）
+    if (p.C <= 0.0 || std::fabs(p.B) < eps)
+        return 0.0;
 
-    // double A = 3.091684;
-    // double B = 1.197694;
-    // double C = 217.316723;
-    // double D = 0.076063;
-
-    double A = 2.325288;
-    double B = 1.153325;
-    double C = 305.492974;
-    double D = 0.072872;
-    // 防止 B=0 或 C<=0
-    if (C <= 0 || std::fabs(B) < eps)
-        return 0;
-
-    // clamp y
+    const double A = p.A;
+    const double B = p.B;
+    const double C = p.C;
+    const double D = p.D;
+    qDebug() << "FourPL: A=" << A << " B=" << B << " C=" << C << " D=" << D;
+    // clamp y 到曲线有效区间
     double y_min = std::min(A, D) + eps;
     double y_max = std::max(A, D) - eps;
 
@@ -46,18 +43,16 @@ static double fourPL_inverse(double y, const MainViewModel::FourPLParams& p) {
 
     double denom = (y - D);
     if (std::fabs(denom) < eps)
-        return 1e9;  // 太接近 D，浓度无限大
+        return 1e9;  // 接近下平台，浓度趋于无穷
 
     double ratio = (A - D) / denom - 1.0;
-    if (ratio <= 0)
-        return 0;
+    if (ratio <= 0.0)
+        return 0.0;
 
     double t = std::pow(ratio, 1.0 / B);
-
     double x = C * t;
-    if (x < 0)
-        x = 0;
-    return x;
+
+    return (x < 0.0) ? 0.0 : x;
 }
 class ScopedTimer {
 public:
@@ -357,16 +352,76 @@ static double avgPeak(const QVector<double>& y, int idx) {
     }
     return cnt ? sum / cnt : 0;
 }
+static bool parseFourPLFromJson(const QString& json,
+                                MainViewModel::FourPLParams& out) {
+    // 1. 空字符串保护
+    if (json.trimmed().isEmpty()) {
+        qWarning() << "[FourPL] empty methodData";
+        return false;
+    }
 
-QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
+    // 2. JSON 解析
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        qWarning() << "[FourPL] json parse failed:" << err.errorString();
+        return false;
+    }
+
+    QJsonObject o = doc.object();
+
+    // 3. 取参数（缺失则为 0）
+    out.A = o.value("A").toDouble(0.0);
+    out.B = o.value("B").toDouble(0.0);
+    out.C = o.value("C").toDouble(0.0);
+    out.D = o.value("D").toDouble(0.0);
+
+    // 4. 基本合法性校验（工程必须）
+    if (out.C <= 0.0 || std::fabs(out.B) < 1e-9) {
+        qWarning() << "[FourPL] invalid params:"
+                   << "A=" << out.A
+                   << "B=" << out.B
+                   << "C=" << out.C
+                   << "D=" << out.D;
+        return false;
+    }
+
+    return true;
+}
+
+QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
     QVariantMap r;
 
     int n = adcList.size();
-    if (n < 1500) {
+    if (n < 600) {
         qWarning() << "[calcTC] curve too short, n=" << n;
         return r;
     }
+    // =========================
+    // 0) 根据 id 取方法配置
+    // =========================
+    if (!m_methodVm) {
+        qWarning() << "[calcTC] methodVm not set";
+        return r;
+    }
 
+    QrMethodConfigViewModel::Item method =
+        m_methodVm->findItemById(id);
+    qInfo() << "[calcTC] methodId=" << id
+            << "methodData.len=" << method.methodData.size()
+            << "methodData=" << method.methodData;
+    if (method.rid == 0) {
+        qWarning() << "[calcTC] invalid method config id =" << id;
+        return QVariantMap();
+    }
+    // =========================
+    // 0.1) 从 methodData 解析 4PL 参数
+    // =========================
+    FourPLParams curve;
+    if (!parseFourPLFromJson(method.methodData, curve)) {
+        qWarning() << "[calcTC] invalid FourPL params, methodId =" << id;
+        return QVariantMap();
+    }
     // -------------------------
     // 1) 转数组
     // -------------------------
@@ -377,8 +432,13 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
     // ======================================================================
     // 2) 固定区间找峰（先 C → 后 T）
     // ======================================================================
-    int CL = 700, CR = 1200;   // C 区
-    int TL = 1350, TR = 1700;  // T 区
+    int CL = method.C1;
+    int CR = method.C2;
+    int TL = method.T1;
+    int TR = method.T2;
+    //.methodData = QString("C1=%1,C2=%2,T1=%3,T2=%4").arg(CL).arg(CR).arg(TL).arg(TR);
+    // int CL = 550, CR = 700;    // C 区
+    // int TL = 1000, TR = 1160;  // T 区
 
     if (CR >= n)
         CR = n - 1;
@@ -464,7 +524,7 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
     // ======================================================================
     // 7) 四参数浓度
     // ======================================================================
-    double concentration = fourPL_inverse(ratio, stdCurve);
+    double concentration = fourPL_inverse(ratio, curve);
 
     // ======================================================================
     // 8) ★★★ 只有两个结果：阳性 / 阴性 ★★★
@@ -510,91 +570,91 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList) {
     return r;
 }
 
-QVariantMap MainViewModel::calcTC_FixedWindow(const QVariantList& adcList) {
-    QVariantMap result;
-    result["hasT"] = false;
-    result["hasC"] = false;
-    result["areaT"] = 0.0;
-    result["areaC"] = 0.0;
-    result["ratioTC"] = 0.0;
+// QVariantMap MainViewModel::calcTC_FixedWindow(const QVariantList& adcList) {
+//     QVariantMap result;
+//     result["hasT"] = false;
+//     result["hasC"] = false;
+//     result["areaT"] = 0.0;
+//     result["areaC"] = 0.0;
+//     result["ratioTC"] = 0.0;
 
-    const int n = adcList.size();
-    if (n < 100) {
-        // 点太少，直接返回
-        return result;
-    }
+//     const int n = adcList.size();
+//     if (n < 100) {
+//         // 点太少，直接返回
+//         return result;
+//     }
 
-    // 1) 把 QVariantList 转成 double 数组，方便运算
-    QVector<double> y(n);
-    for (int i = 0; i < n; ++i) {
-        y[i] = adcList[i].toDouble();
-    }
+//     // 1) 把 QVariantList 转成 double 数组，方便运算
+//     QVector<double> y(n);
+//     for (int i = 0; i < n; ++i) {
+//         y[i] = adcList[i].toDouble();
+//     }
 
-    // 2) 固定窗口索引（❗你需要根据自己的卡，自己微调这四个数字）
-    //   假设峰位置大概是：
-    //   T 峰：索引在 600~900
-    //   C 峰：索引在 1500~1800
-    //   你可以先用 qDebug 把峰位置打印一下，然后改成更合适的值
-    const int T_START = 600;
-    const int T_END = 900;
-    const int C_START = 1500;
-    const int C_END = 1800;
+//     // 2) 固定窗口索引（❗你需要根据自己的卡，自己微调这四个数字）
+//     //   假设峰位置大概是：
+//     //   T 峰：索引在 600~900
+//     //   C 峰：索引在 1500~1800
+//     //   你可以先用 qDebug 把峰位置打印一下，然后改成更合适的值
+//     const int T_START = 600;
+//     const int T_END = 900;
+//     const int C_START = 1500;
+//     const int C_END = 1800;
 
-    // 防止越界，做一下裁剪
-    const int tStart = qBound(0, T_START, n - 1);
-    const int tEnd = qBound(0, T_END, n - 1);
-    const int cStart = qBound(0, C_START, n - 1);
-    const int cEnd = qBound(0, C_END, n - 1);
+//     // 防止越界，做一下裁剪
+//     const int tStart = qBound(0, T_START, n - 1);
+//     const int tEnd = qBound(0, T_END, n - 1);
+//     const int cStart = qBound(0, C_START, n - 1);
+//     const int cEnd = qBound(0, C_END, n - 1);
 
-    if (tEnd <= tStart || cEnd <= cStart) {
-        return result;  // 窗口非法
-    }
+//     if (tEnd <= tStart || cEnd <= cStart) {
+//         return result;  // 窗口非法
+//     }
 
-    // 3) 计算每个窗口内的“局部基线”（取窗口内最小值）
-    double baseT = y[tStart];
-    for (int i = tStart + 1; i <= tEnd; ++i) {
-        if (y[i] < baseT)
-            baseT = y[i];
-    }
+//     // 3) 计算每个窗口内的“局部基线”（取窗口内最小值）
+//     double baseT = y[tStart];
+//     for (int i = tStart + 1; i <= tEnd; ++i) {
+//         if (y[i] < baseT)
+//             baseT = y[i];
+//     }
 
-    double baseC = y[cStart];
-    for (int i = cStart + 1; i <= cEnd; ++i) {
-        if (y[i] < baseC)
-            baseC = y[i];
-    }
+//     double baseC = y[cStart];
+//     for (int i = cStart + 1; i <= cEnd; ++i) {
+//         if (y[i] < baseC)
+//             baseC = y[i];
+//     }
 
-    // 4) 在各自窗口内做简单积分：Σ max(0, y[i] - base)
-    double areaT = 0.0;
-    for (int i = tStart; i <= tEnd; ++i) {
-        double v = y[i] - baseT;  // 去掉局部基线
-        if (v > 0.0)
-            areaT += v;  // 直接累加
-    }
+//     // 4) 在各自窗口内做简单积分：Σ max(0, y[i] - base)
+//     double areaT = 0.0;
+//     for (int i = tStart; i <= tEnd; ++i) {
+//         double v = y[i] - baseT;  // 去掉局部基线
+//         if (v > 0.0)
+//             areaT += v;  // 直接累加
+//     }
 
-    double areaC = 0.0;
-    for (int i = cStart; i <= cEnd; ++i) {
-        double v = y[i] - baseC;
-        if (v > 0.0)
-            areaC += v;
-    }
+//     double areaC = 0.0;
+//     for (int i = cStart; i <= cEnd; ++i) {
+//         double v = y[i] - baseC;
+//         if (v > 0.0)
+//             areaC += v;
+//     }
 
-    // 5) 判断有没有峰（面积大于一个门限就认为存在）
-    const double MIN_AREA = 0.3;  // 这个阈值你可以根据实际噪声调整
+//     // 5) 判断有没有峰（面积大于一个门限就认为存在）
+//     const double MIN_AREA = 0.3;  // 这个阈值你可以根据实际噪声调整
 
-    bool hasT = (areaT > MIN_AREA);
-    bool hasC = (areaC > MIN_AREA);
+//     bool hasT = (areaT > MIN_AREA);
+//     bool hasC = (areaC > MIN_AREA);
 
-    double ratioTC = 0.0;
-    if (hasT && hasC && areaC > 0.0) {
-        ratioTC = areaT / areaC;  // 与别的仪器一样，用面积比值
-    }
+//     double ratioTC = 0.0;
+//     if (hasT && hasC && areaC > 0.0) {
+//         ratioTC = areaT / areaC;  // 与别的仪器一样，用面积比值
+//     }
 
-    // 6) 写回结果，给 QML 用
-    result["hasT"] = hasT;
-    result["hasC"] = hasC;
-    result["areaT"] = areaT;
-    result["areaC"] = areaC;
-    result["ratioTC"] = ratioTC;
+//     // 6) 写回结果，给 QML 用
+//     result["hasT"] = hasT;
+//     result["hasC"] = hasC;
+//     result["areaT"] = areaT;
+//     result["areaC"] = areaC;
+//     result["ratioTC"] = ratioTC;
 
-    return result;
-}
+//     return result;
+// }

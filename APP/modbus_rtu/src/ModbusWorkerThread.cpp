@@ -83,7 +83,7 @@ void ModbusWorkerThread::threadFunc() {
         return;
     int fd = modbus_get_socket(ctx);
 
-    modbus_set_debug(ctx, TRUE);
+    // modbus_set_debug(ctx, TRUE);
     std::cout << "🧵 Modbus worker thread started." << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     tcflush(fd, TCIFLUSH);

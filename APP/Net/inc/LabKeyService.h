@@ -16,10 +16,11 @@ public:
     // QML 只调用这一个
     Q_INVOKABLE void fetchMethodLibrary(const QString& type,
                                         const QString& serial);
-
+    Q_INVOKABLE void uploadRun(const QVariantMap& record);
 signals:
     void methodLibraryReady(const QJsonObject& data);
     void errorOccured(const QString& msg);
+    void uploadFinished(bool ok, int status, QString raw, QString err);
 
 private:
     TaskQueueWorker m_worker;

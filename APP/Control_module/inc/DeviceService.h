@@ -29,7 +29,7 @@ public:
     explicit DeviceService(ModbusRtuClient* worker);
     DeviceService(QObject* parent = nullptr) : QObject(parent), m_worker(nullptr) {}
     ~DeviceService();
-
+    Q_INVOKABLE void ENFLALED(int enable);
     Q_INVOKABLE void exec(const QVector<ExecItem>& items);
     Q_INVOKABLE void motorStart();
     DeviceStatusObject* status() { return &m_statusObj; }

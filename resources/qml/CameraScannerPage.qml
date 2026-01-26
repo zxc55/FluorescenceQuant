@@ -115,10 +115,10 @@ function parseQrText(text) {
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
-    //     onClicked: {
-    //     qrScanner.stopScan()      // 关闭前先停扫描，避免继续回调
-    //     root.visible = false      // 隐藏页面 = 返回
-    // }
+        onClicked: {
+   //     qrScanner.stopScan()      // 关闭前先停扫描，避免继续回调
+        root.visible = false      // 隐藏页面 = 返回
+    }
     }
 
     // ===== 解码结果回调 =====
@@ -232,15 +232,18 @@ function parseQrText(text) {
                         _closing = false
                     }
                 }
+            
     // ===== 控制开始/停止扫描 =====
     // 第一次显示时启动，再次显示时也会重新启动
     onVisibleChanged: {
         if (visible) {
             _closing = false  
+            deviceService.ENFLALED(1)
             qrScanner.startScan()
             resultLabel.text = "请对准二维码"
         } else {
             qrScanner.stopScan()
+            deviceService.ENFLALED(0)
         }
     }
 }

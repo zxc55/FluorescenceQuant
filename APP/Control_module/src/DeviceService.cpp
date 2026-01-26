@@ -56,6 +56,13 @@ void DeviceService::motorStart() {
 
     exec({it});
 }
+void DeviceService::ENFLALED(int enable) {
+    ExecItem it;
+    it.func = DevFunc::EnableFluorescence;
+    it.value = enable;  // 写 0 触发
+
+    exec({it});
+}
 void DeviceService::exec(const QVector<ExecItem>& items) {
     if (items.isEmpty()) {
         qDebug() << "[DeviceService] exec empty items";
@@ -127,22 +134,19 @@ void DeviceService::threadLoop() {
                     if (sec == 0) {
                         qDebug() << "[DeviceService] incub slot" << i << "finished";
                         anyTimeout = true;
-                    }
-                    if (anyTimeout && !m_fuyuTimeoutSent) {
                         ExecItem it;
                         it.func = DevFunc::incubatetimeout;
-                        it.value = 1;
+                        it.value = i + 1;
 
                         exec({it});  // 进入线程队列
-
                         m_fuyuTimeoutSent = true;
-
+                    }
+                    if (anyTimeout && !m_fuyuTimeoutSent) {
                         qDebug() << "[DeviceService] fuyutimeout write addr=8";
                     }
                 }
             }
         }
-
         /* =========================================================
          * ② 等待任务 / poll 时间 / 退出
          * ========================================================= */
@@ -202,10 +206,11 @@ void DeviceService::threadLoop() {
                     }
 
                     case DevFunc::incubatetimeout: {  // ★ 孵育超时
+                                                      // QVector<uint16_t> regs;
+                        int index = it.value.toInt();
                         QVector<uint16_t> regs;
-                        regs << 1;  // 写 1
+                        regs.append(static_cast<uint16_t>(index));
 
-                        constexpr uint16_t FUYU_TIMEOUT_ADDR = 8;
                         m_worker->postWriteRegisters(FUYU_TIMEOUT_ADDR, regs);
 
                         qDebug() << "[DeviceService] write incubate timeout = 1";
@@ -216,6 +221,15 @@ void DeviceService::threadLoop() {
                         regs1 << 1;  // 写 1
 
                         constexpr uint16_t START_ADDR = 21;
+                        m_worker->postWriteRegisters(START_ADDR, regs1);
+
+                        qDebug() << "[DeviceService] write start = 1";
+                        break;
+                    }
+                    case DevFunc::EnableFluorescence: {
+                        QVector<uint16_t> regs1;
+                        regs1.append(static_cast<uint16_t>(it.value.toInt()));
+                        constexpr uint16_t START_ADDR = 25;
                         m_worker->postWriteRegisters(START_ADDR, regs1);
 
                         qDebug() << "[DeviceService] write start = 1";

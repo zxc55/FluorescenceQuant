@@ -172,23 +172,23 @@ CREATE TABLE IF NOT EXISTS projects(
 );
 )SQL");
 
-    execOne(q, R"SQL(
-INSERT INTO projects(name,batch,updated_at)
-SELECT '黄曲霉毒素','B2025-001',datetime('now','localtime')
-WHERE NOT EXISTS (SELECT 1 FROM projects);
-)SQL");
+    //     execOne(q, R"SQL(
+    // INSERT INTO projects(name,batch,updated_at)
+    // SELECT '黄曲霉毒素','B2025-001',datetime('now','localtime')
+    // WHERE NOT EXISTS (SELECT 1 FROM projects);
+    // )SQL");
 
-    execOne(q, R"SQL(
-INSERT INTO projects(name,batch,updated_at)
-SELECT '呕吐毒素','B2025-002',datetime('now','localtime')
-WHERE (SELECT COUNT(1) FROM projects)=1;
-)SQL");
+    //     execOne(q, R"SQL(
+    // INSERT INTO projects(name,batch,updated_at)
+    // SELECT '呕吐毒素','B2025-002',datetime('now','localtime')
+    // WHERE (SELECT COUNT(1) FROM projects)=1;
+    // )SQL");
 
-    execOne(q, R"SQL(
-INSERT INTO projects(name,batch,updated_at)
-SELECT '玉米赤霉烯酮','B2025-003',datetime('now','localtime')
-WHERE (SELECT COUNT(1) FROM projects)=2;
-)SQL");
+    //     execOne(q, R"SQL(
+    // INSERT INTO projects(name,batch,updated_at)
+    // SELECT '玉米赤霉烯酮','B2025-003',datetime('now','localtime')
+    // WHERE (SELECT COUNT(1) FROM projects)=2;
+    // )SQL");
 
     // ===== project_info =====
     execOne(q, R"SQL(

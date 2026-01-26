@@ -22,7 +22,10 @@ enum class DBTaskType {
     ExportHistory,
     InsertProjectInfo,
     LookupQrMethodConfig,
-    UpsertQrMethodConfig
+    UpsertQrMethodConfig,
+    LoadQrMethodConfigs,  // 新增：加载 qr_method_config 列表（每行注释）
+    DeleteQrMethodConfig  // 新增：删除 qr_method_config 某条记录（每行注释）
+
 };
 
 struct DBTask {
@@ -145,5 +148,17 @@ struct DBTask {
         t.type = DBTaskType::UpsertQrMethodConfig;
         t.info = cfg;  // 复用 info 字段承载 cfg
         return t;
+    }
+    static DBTask loadQrMethodConfigs() {          // 新增：加载列表任务构造器（每行注释）
+        DBTask t;                                  // 创建任务对象（每行注释）
+        t.type = DBTaskType::LoadQrMethodConfigs;  // 设置任务类型（每行注释）
+        return t;                                  // 返回任务（每行注释）
+    }
+
+    static DBTask deleteQrMethodConfig(int id) {    // 新增：删除任务构造器（每行注释）
+        DBTask t;                                   // 创建任务对象（每行注释）
+        t.type = DBTaskType::DeleteQrMethodConfig;  // 设置任务类型（每行注释）
+        t.p1 = id;                                  // p1 存 id（每行注释）
+        return t;                                   // 返回任务（每行注释）
     }
 };

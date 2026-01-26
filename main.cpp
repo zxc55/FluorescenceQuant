@@ -46,8 +46,10 @@
 #include "DeviceStatusObject.h"
 #include "LabKeyClient.h"
 #include "LabKeyService.h"
+#include "QrMethodConfigViewModel.h"  // 新增：方法配置表的 ViewModel 头文件（每行注释）
 #include "QrRepoModel.h"
 #include "TaskQueueWorker.h"
+
 static bool ensureDir(const QString& path) {
     QDir d;
     return d.exists(path) ? true : d.mkpath(path);
@@ -131,6 +133,10 @@ int main(int argc, char* argv[]) {
     qRegisterMetaType<HistoryRow>("HistoryRow");
     qRegisterMetaType<QVector<HistoryRow>>("QVector<HistoryRow>");
     qRegisterMetaType<PrintData>("PrintData");
+    qRegisterMetaType<QrMethodConfigRow>("QrMethodConfigRow");                    // 新增：方法配置行结构体元类型注册（每行注释）
+    qRegisterMetaType<QVector<QrMethodConfigRow>>("QVector<QrMethodConfigRow>");  // 新增：方法配置行列表元类型注册（每行注释）
+    qRegisterMetaType<QrMethodConfigRow>("QrMethodConfigRow");                    // 新增：方法配置行（每行注释）
+    qRegisterMetaType<QVector<QrMethodConfigRow>>("QVector<QrMethodConfigRow>");  // 新增：方法配置行列表（每行注释）
 
     // ======================
     // 注册 QML 类型
@@ -142,6 +148,7 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<MyLineSeries>("App", 1, 0, "MyLineSeries");
     qmlRegisterType<CurveLoader>("App", 1, 0, "CurveLoader");
     qmlRegisterType<DeviceService>("App", 1, 0, "DeviceService");
+
     // ======================
     // DB 路径
     // ======================
@@ -157,20 +164,21 @@ int main(int argc, char* argv[]) {
     /* 1. 启动后台任务线程 */
     TaskQueueWorker worker;
     worker.start();
+    LabKeyService* labkeyService = new LabKeyService(&app);
 
     /* 2. 创建 LabKey libcurl 客户端
      *   - 不继承 QObject
      *   - 不存在线程亲缘性问题
      *   - 可以安全放在 std::thread 里使用
      */
-    auto* labkey = new LabKeyClientCurl(
-        "https://lims.pribolab.net:13101",
-        "/QuantitativeFluorescence",
-        "Basic YXBpa2V5OmQ3NzNlOTNiZDI0NGJmMDA5MzU0MWQzZDY4YWNiMjU2ODA5NGJmNjA3ZjMxNzdiNmZkYjBiZjQ0NjBlMzQ5MjM=",
-        "/tmp/labkey_cookie.txt"  // cookie 文件，等价 curl -c / -b
-    );
+    // auto* labkey = new LabKeyClientCurl(
+    //     "https://lims.pribolab.net:13101",
+    //     "/QuantitativeFluorescence",
+    //     "Basic YXBpa2V5OmQ3NzNlOTNiZDI0NGJmMDA5MzU0MWQzZDY4YWNiMjU2ODA5NGJmNjA3ZjMxNzdiNmZkYjBiZjQ0NjBlMzQ5MjM=",
+    //     "/tmp/labkey_cookie.txt"  // cookie 文件，等价 curl -c / -b
+    // );
 
-    // /* 3. 投递 LabKey 任务到后台线程 */
+    /* 3. 投递 LabKey 任务到后台线程 */
     // worker.pushTask([labkey]() {
     //     qDebug() << "[TASK] LabKey start";
 
@@ -185,7 +193,7 @@ int main(int argc, char* argv[]) {
     //     }
 
     //     qDebug() << "[TASK] CSRF =" << csrf.c_str();
-
+    // });
     //     /* 3.2 获取 MethodLibrary */
     //     if (!labkey->fetchMethodLibrary("test", "1", json, err)) {
     //         qWarning() << "[TASK] fetchMethodLibrary failed:" << err.c_str();
@@ -243,8 +251,11 @@ int main(int argc, char* argv[]) {
     UserViewModel userVm;
     ProjectsViewModel projectsVm(db);
     HistoryViewModel historyVm(db);
+    // QrMethodConfigViewModel qrMethodConfigVm(db);  // 新增：方法配置表 ViewModel（每行注释）
+    auto* qrMethodConfigVm = new QrMethodConfigViewModel(db, &mainVm);
     PrinterDeviceController printerCtrl(&settingsVm);
     QrRepoModel* qrRepoModel = new QrRepoModel(db);
+    mainVm.setMethodConfigVm(qrMethodConfigVm);
     // ==== 绑定 DB ====
     settingsVm.bindWorker(db);
     userVm.bindWorker(db);
@@ -255,6 +266,7 @@ int main(int argc, char* argv[]) {
         db->postLoadUsers();
         db->postLoadProjects();
         db->postLoadHistory();
+        db->postLoadQrMethodConfigs();
     });
 
     // ======================
@@ -269,7 +281,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(db, &DBWorker::settingsLoaded,
                      &settingsVm, &SettingsViewModel::onSettingsLoaded,
                      Qt::QueuedConnection);
-    LabKeyService labkeyService;
+    // LabKeyService labkeyService;
     // ======================
     // 加载 QSS
     // ======================
@@ -285,13 +297,14 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("settingsVm", &settingsVm);
     engine.rootContext()->setContextProperty("userVm", &userVm);
     engine.rootContext()->setContextProperty("projectsVm", &projectsVm);
+    engine.rootContext()->setContextProperty("qrMethodConfigVm", qrMethodConfigVm);  
     engine.rootContext()->setContextProperty("historyVm", &historyVm);
     engine.rootContext()->setContextProperty("keys", &keysProxy);
     engine.rootContext()->setContextProperty("qrScanner", &qrScanner);
     engine.rootContext()->setContextProperty("printerCtrl", &printerCtrl);
     engine.rootContext()->setContextProperty("deviceService", deviceMgr->service());
     engine.rootContext()->setContextProperty("dbWorker", qrRepoModel);
-    engine.rootContext()->setContextProperty("labkeyService", &labkeyService);
+    engine.rootContext()->setContextProperty("labkeyService", labkeyService);
     engine.addImageProvider("qr", new QrImageProvider(&qrScanner));
 
     QUrl url(QStringLiteral("qrc:/qml/main.qml"));

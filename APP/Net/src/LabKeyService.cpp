@@ -1,5 +1,6 @@
 #include "LabKeyService.h"
 
+#include <QDebug>
 LabKeyService::LabKeyService(QObject* parent)
     : QObject(parent) {
     m_worker.start();
@@ -51,5 +52,58 @@ void LabKeyService::fetchMethodLibrary(const QString& type,
         }
 
         emit methodLibraryReady(obj);
+    });
+}
+void LabKeyService::uploadRun(const QVariantMap& record) {
+    const QVariantMap recordCopy = record;
+
+    m_worker.pushTask([this, recordCopy]() {
+        qDebug() << "[TASK][LabKey] start";
+
+        std::string csrf;
+        std::string err;
+
+        // =========================
+        // ① fetch CSRF
+        // =========================
+        if (!m_client->fetchToken(csrf, err)) {
+            qWarning() << "[TASK][LabKey] fetchToken FAILED:"
+                       << QString::fromStdString(err);
+            emit uploadFinished(false, -1, "", "fetchToken failed");
+            return;
+        }
+
+        qDebug() << "[TASK][LabKey] CSRF =" << csrf.c_str();
+
+        // =========================
+        // ② upload
+        // =========================
+        int status = -1;
+        QString rawResp;
+        QString qerr;
+        QString sendJson;  // ★ 新增：拿到真正发出去的 JSON
+
+        bool ok = m_client->uploadRun(
+            recordCopy,
+            &status,
+            &rawResp,
+            &qerr,
+            &sendJson  // ★ 让 client 回传 JSON
+        );
+
+        // =========================
+        // ③ 打印完整链路
+        // =========================
+        qDebug().noquote() << "[TASK][LabKey] SEND JSON =" << sendJson;
+        qDebug() << "[TASK][LabKey] HTTP status =" << status;
+        qDebug().noquote() << "[TASK][LabKey] RAW response =" << rawResp;
+
+        if (ok)
+            qDebug() << "[TASK][LabKey] upload SUCCESS ✅";
+        else
+            qWarning() << "[TASK][LabKey] upload FAILED ❌";
+
+        emit uploadFinished(ok, status, rawResp, qerr);
+        qDebug() << "[TASK][LabKey] end";
     });
 }
