@@ -863,8 +863,13 @@ function doStartTestInternal()
                         id: projectPage
                         property int selectedId: -1 // 当前选中行
                         onSelectedIdChanged: {
-                                console.log("[QrMethodConfig] global selectedId =", selectedId)
-                            }
+                        console.log("[QrMethodConfig] selectedId =", selectedId,
+                            "temperature =", qrMethodConfigVm.getTemperatureById(selectedId),
+                            "timeSec =",     qrMethodConfigVm.getTimeSecById(selectedId))
+                            
+                        deviceService.setTargetTemperature(qrMethodConfigVm.getTemperatureById(selectedId))
+                        deviceService.setIncubationTime(qrMethodConfigVm.getTimeSecById(selectedId))
+                        }
                         ColumnLayout {
                             anchors.fill: parent
                             spacing: 12

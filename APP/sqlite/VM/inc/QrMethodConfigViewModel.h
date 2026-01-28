@@ -23,6 +23,8 @@ Q_PROPERTY(int count READ rowCount NOTIFY countChanged)  // 暴露 count 给 QML
         BatchCodeRole,               // batchCode 角色
         updatedAtRole,               // updated角色
         MethodDataRole,
+        temperatureRole,
+        timeSecRole,
         C1Role,
         T1Role,
         C2Role,
@@ -39,6 +41,8 @@ Q_PROPERTY(int count READ rowCount NOTIFY countChanged)  // 暴露 count 给 QML
         int T2 = 0;           // T2
         QString methodData;
         QString updatedAt;
+        double temperature;
+        int timeSec;
     };
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;  // 必须实现：返回行数
     QVariant data(const QModelIndex& index, int role) const override;        // 必须实现：按 role 返回数据
@@ -50,6 +54,8 @@ Q_PROPERTY(int count READ rowCount NOTIFY countChanged)  // 暴露 count 给 QML
     Q_INVOKABLE QString getProjectNameById(int id) const;  // QML 调用：按 id 获取 projectName
     Q_INVOKABLE QString getBatchCodeById(int id) const;    // QML 调用：按 id 获取 batchCode
     Q_INVOKABLE QString getMethodDataById(int id) const;   // QML 调用：按 id 获取 methodData
+    Q_INVOKABLE double getTemperatureById(int id) const;
+    Q_INVOKABLE int getTimeSecById(int id) const;
     Item findItemById(int id) const;
     Q_INVOKABLE bool insertMethodConfigInfo(const QVariantMap& info);  // QML 调用：插入一条 method config（走 DBWorker）
     Q_INVOKABLE QVariantMap findItemByIdQml(int id) const;

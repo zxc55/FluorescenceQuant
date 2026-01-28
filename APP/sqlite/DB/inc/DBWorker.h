@@ -23,6 +23,8 @@ struct QrMethodConfigRow  // DB 返回行结构体（对标 ProjectRow）
     int C2 = 0;  // C2
     int T2 = 0;  // T2
     QString methodData;
+    double temperature = 0.0;
+    int timeSec = 0;
 };
 class DBWorker : public QObject {
     Q_OBJECT

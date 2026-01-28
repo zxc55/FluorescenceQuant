@@ -50,6 +50,10 @@ QVariant QrMethodConfigViewModel::data(const QModelIndex& index, int role) const
         return item.T2;
     case MethodDataRole:
         return item.methodData;
+    case temperatureRole:
+        return item.temperature;
+    case timeSecRole:
+        return item.timeSec;
 
     default:                // 未知 role
         return QVariant();  // 返回空
@@ -62,6 +66,8 @@ QHash<int, QByteArray> QrMethodConfigViewModel::roleNames() const {
     roles[ProjectNameRole] = "projectName";  // QML: projectName
     roles[BatchCodeRole] = "batchCode";      // QML: batchCode
     roles[updatedAtRole] = "updatedAt";      // QML:
+    roles[temperatureRole] = "temperature";
+    roles[timeSecRole] = "timeSec";
     roles[C1Role] = "C1";
     roles[T1Role] = "T1";
     roles[C2Role] = "C2";
@@ -97,6 +103,8 @@ void QrMethodConfigViewModel::onLoaded(const QVector<QrMethodConfigRow>& rows) {
         item.projectName = r.projectName;  // projectName
         item.batchCode = r.batchCode;      // batchCode
         item.updatedAt = r.updatedAt;      // methodData
+        item.temperature = r.temperature;
+        item.timeSec = r.timeSec;
         item.C1 = r.C1;
         item.T1 = r.T1;
         item.C2 = r.C2;
@@ -151,7 +159,25 @@ QString QrMethodConfigViewModel::getBatchCodeById(int id) const {
     }
     return QString();  // 未找到返回空
 }
+// 返回指定 id 的 temperature（REAL → double）
+double QrMethodConfigViewModel::getTemperatureById(int id) const {
+    for (const auto& item : m_list) {
+        if (item.rid == id) {
+            return item.temperature;
+        }
+    }
+    return 0.0;  // 未找到返回默认值 0.0（与表默认值一致）
+}
 
+// 返回指定 id 的 timeSec（INTEGER → int）
+int QrMethodConfigViewModel::getTimeSecById(int id) const {
+    for (const auto& item : m_list) {
+        if (item.rid == id) {
+            return item.timeSec;
+        }
+    }
+    return 0;  // 未找到返回默认值 0（与表默认值一致）
+}
 QString QrMethodConfigViewModel::getMethodDataById(int id) const {
     for (const auto& item : m_list) {  // 遍历列表
         if (item.rid == id)            // 找到匹配 id

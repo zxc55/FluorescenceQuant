@@ -32,6 +32,8 @@ public:
     Q_INVOKABLE void ENFLALED(int enable);
     Q_INVOKABLE void exec(const QVector<ExecItem>& items);
     Q_INVOKABLE void motorStart();
+    Q_INVOKABLE void setTargetTemperature(float temperature);
+    Q_INVOKABLE void setIncubationTime(int seconds);
     DeviceStatusObject* status() { return &m_statusObj; }
     // 启停后台线程
     void start(int pollIntervalMs);
@@ -53,7 +55,7 @@ private:
 
 private:
     int m_pollIntervalMs = 500;
-    static constexpr int INCUB_TOTAL_SEC = 1 * 60;  // 6 分钟
+    static int INCUB_TOTAL_SEC;  // 6 分钟
     // ===== 孵育超时寄存器配置 =====
     static constexpr uint16_t FUYU_TIMEOUT_ADDR = 8;
     // ===== 防止重复写 =====

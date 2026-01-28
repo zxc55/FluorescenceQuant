@@ -18,7 +18,8 @@ enum class DevFunc : uint16_t {
     ReadMotorState,
     ReadMotorSteps,
     WriteMotorSteps,
-
+    SetTactualemp,
+    Settint_time,
     EnableFluorescence
 };
 

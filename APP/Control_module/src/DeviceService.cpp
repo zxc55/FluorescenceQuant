@@ -6,6 +6,7 @@
 
 #include "DeviceState.h"
 #include "DeviceStatusObject.h"
+int DeviceService::INCUB_TOTAL_SEC = 60 * 6;
 static float regsToFloat_BE(const QVector<uint16_t>& v) {
     if (v.size() < 2)
         return 0.0f;
@@ -53,6 +54,28 @@ void DeviceService::motorStart() {
     ExecItem it;
     it.func = DevFunc::MotorStart;
     it.value = 1;  // 写 1 触发
+
+    exec({it});
+}
+// 或者如果你设备协议要求整数（比如 单位是 0.1℃，传 365 表示 36.5℃）
+void DeviceService::setTargetTemperature(float temperature) {
+    ExecItem it;
+    it.func = DevFunc::SetTactualemp;
+    it.value = temperature;  // QVariant 会自动处理 float → double
+
+    // 可选：加范围检查，防止异常值
+    if (temperature < 0.0f || temperature > 100.0f) {
+        qWarning() << "[DeviceService] 目标温度超出范围:" << temperature << "℃，忽略设置";
+        return;
+    }
+
+    exec({it});
+    qDebug() << "[DeviceService] 发送设置目标温度命令:" << temperature << "℃";
+}
+void DeviceService::setIncubationTime(int seconds) {
+    ExecItem it;
+    it.func = DevFunc::Settint_time;  // 使用你枚举里的名字
+    it.value = seconds;               // 直接传秒数
 
     exec({it});
 }
@@ -233,6 +256,43 @@ void DeviceService::threadLoop() {
                         m_worker->postWriteRegisters(START_ADDR, regs1);
 
                         qDebug() << "[DeviceService] write start = 1";
+                        break;
+                    }
+                    case DevFunc::SetTactualemp: {
+                        float temp = it.value.toFloat();
+
+                        // 可选：范围检查（根据设备规格调整）
+                        if (temp < 0.0f || temp > 100.0f) {
+                            qWarning() << "[DeviceService] 温度值异常:" << temp << "℃，忽略写入";
+                            break;
+                        }
+
+                        // 获取 float 的 32 位二进制表示
+                        uint32_t bits = *reinterpret_cast<uint32_t*>(&temp);
+
+                        // CDAB 顺序：寄存器 3 = 低 16 位 (CD)，寄存器 4 = 高 16 位 (AB)
+                        uint16_t reg3 = bits & 0xFFFF;          // 地址 3: CD
+                        uint16_t reg4 = (bits >> 16) & 0xFFFF;  // 地址 4: AB
+
+                        QVector<uint16_t> regs{reg3, reg4};
+
+                        constexpr uint16_t START_ADDR = 3;
+                        m_worker->postWriteRegisters(START_ADDR, regs);
+
+                        // 加日志，便于调试
+                        qDebug() << "[DeviceService] 设置温度:" << temp << "℃"
+                                 << "→ reg3=0x" << QString::number(reg3, 16).toUpper().rightJustified(4, '0')
+                                 << "reg4=0x" << QString::number(reg4, 16).toUpper().rightJustified(4, '0');
+
+                        break;
+                    }
+                    case DevFunc::Settint_time: {
+                        uint16_t sec = it.value.toInt();
+                        if (sec < 10 || sec > 3600 * 2) {  // 例如 10秒 ~ 2小时
+                            qWarning() << "[DeviceService] 孵育时间异常:" << sec << "秒，忽略设置";
+                            break;
+                        }
+                        INCUB_TOTAL_SEC = sec;
                         break;
                     }
                     default:

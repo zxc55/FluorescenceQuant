@@ -448,13 +448,14 @@ void DBWorker::doLoadQrMethodConfigs() {
         "  batchCode, "    // 2  批次编码
         "  updated_at, "   // 3  更新时间
         "  methodData, "   // 4  ★ FourPL JSON
-        "  C1, "           // 5  C1
-        "  T1, "           // 6  T1
-        "  C2, "           // 7  C2
-        "  T2 "            // 8  T2
+        "  temperature, "  // 5  温度
+        "  timeSec, "      // 6  时间
+        "  C1, "           // 7  C1
+        "  T1, "           // 8  T1
+        "  C2, "           // 9  C2
+        "  T2 "            // 10  T2
         "FROM qr_method_config "
         "ORDER BY id DESC";
-
     QSqlQuery q(db);
 
     // === 3. 执行 SQL ===
@@ -473,12 +474,13 @@ void DBWorker::doLoadQrMethodConfigs() {
         r.projectName = q.value(1).toString();  // projectName
         r.batchCode = q.value(2).toString();    // batchCode
         r.updatedAt = q.value(3).toString();    // updated_at
-
-        r.methodData = q.value(4).toString();  // ★ FourPL JSON
-        r.C1 = q.value(5).toInt();             // C1
-        r.T1 = q.value(6).toInt();             // T1
-        r.C2 = q.value(7).toInt();             // C2
-        r.T2 = q.value(8).toInt();             // T2
+        r.methodData = q.value(4).toString();   // ★ FourPL JSON
+        r.temperature = q.value(5).toDouble();
+        r.timeSec = q.value(6).toDouble();
+        r.C1 = q.value(7).toInt();   // C1
+        r.T1 = q.value(8).toInt();   // T1
+        r.C2 = q.value(9).toInt();   // C2
+        r.T2 = q.value(10).toInt();  // T2
 
         // === 调试日志（建议保留，定位 DB 问题非常有用） ===
         qDebug() << "[DBWorker] method row:"
@@ -487,7 +489,9 @@ void DBWorker::doLoadQrMethodConfigs() {
                  << "C1=" << r.C1
                  << "T1=" << r.T1
                  << "C2=" << r.C2
-                 << "T2=" << r.T2;
+                 << "T2=" << r.T2
+                 << "temperature=" << r.temperature
+                 << "time_Sec=" << r.timeSec;
 
         rows.push_back(r);
     }
