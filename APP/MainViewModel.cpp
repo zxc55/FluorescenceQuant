@@ -7,13 +7,24 @@
 #include <QJsonObject>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QVector>    // QVector 注释
+#include <QtGlobal>   // qBound/qSwap/qAbs 注释
 #include <algorithm>  // std::sort
+#include <algorithm>  // std::min/std::max/std::sort 注释
 #include <chrono>
 #include <cmath>  // std::abs
 #include <thread>
 
 #include "IIODeviceController.h"
 
+// =========================
+// 峰候选结构体
+// =========================
+struct PeakCand {  // 峰候选结构体注释
+    int idx;       // 峰索引注释
+    double y;      // 峰值注释
+    double prom;   // 峰显著性 prominence 注释
+};  // 结束注释
 #define PEAK_NEIGHBOR 3
 MainViewModel::FourPLParams stdCurve;
 void MainViewModel::setMethodConfigVm(QrMethodConfigViewModel* vm) {
@@ -389,6 +400,191 @@ static bool parseFourPLFromJson(const QString& json,
     return true;
 }
 
+// =========================
+// 计算区间 [L,R] 的前缀最小和后缀最小，用于快速算 prominence
+// leftMin[k]  = min(y[L..L+k])
+// rightMin[k] = min(y[L+k..R])
+// =========================
+static void buildMinArrays(const QVector<double>& y, int L, int R,
+                           QVector<double>& leftMin, QVector<double>& rightMin)  // 构建最小值数组注释
+{
+    const int m = R - L + 1;  // 区间长度注释
+    leftMin.resize(m);        // 调整 leftMin 大小注释
+    rightMin.resize(m);       // 调整 rightMin 大小注释
+
+    leftMin[0] = y[L];                                    // 初始化前缀最小值注释
+    for (int k = 1; k < m; ++k) {                         // 遍历区间注释
+        leftMin[k] = std::min(leftMin[k - 1], y[L + k]);  // 前缀最小值递推注释
+    }  // 结束循环注释
+
+    rightMin[m - 1] = y[R];                                 // 初始化后缀最小值注释
+    for (int k = m - 2; k >= 0; --k) {                      // 逆向遍历注释
+        rightMin[k] = std::min(rightMin[k + 1], y[L + k]);  // 后缀最小值递推注释
+    }  // 结束循环注释
+}  // 结束注释
+
+// =========================
+// 在 [L,R] 内枚举局部峰（含平台峰），并算 prominence
+// prominence = y[peak] - max(左侧最小值, 右侧最小值)
+// =========================
+static void collectPeaksSoftware(const QVector<double>& y, int L, int R,
+                                 double minProminence, QVector<PeakCand>& out)  // 收集峰候选注释
+{
+    out.clear();             // 清空输出注释
+    const int n = y.size();  // 数据长度注释
+    if (n <= 0)
+        return;  // 空数据保护注释
+
+    L = qBound(0, L, n - 1);  // 夹紧 L 注释
+    R = qBound(0, R, n - 1);  // 夹紧 R 注释
+    if (L > R)
+        qSwap(L, R);  // 保证 L<=R 注释
+    if (R - L < 2)
+        return;  // 太短无法做局部峰注释
+
+    QVector<double> leftMin;                     // 前缀最小数组注释
+    QVector<double> rightMin;                    // 后缀最小数组注释
+    buildMinArrays(y, L, R, leftMin, rightMin);  // 构建最小值数组注释
+
+    int i = L + 1;                   // 从 L+1 开始扫描注释
+    while (i <= R - 1) {             // 扫描到 R-1 注释
+        const double yl = y[i - 1];  // 左邻点注释
+        const double yc = y[i];      // 当前点注释
+        const double yr = y[i + 1];  // 右邻点注释
+
+        // ---- 平台峰处理：检测到“上升后进入平台” ----
+        if (yc > yl && yc == yr) {         // 上升并进入平台注释
+            int j = i + 1;                 // 平台右边界游标注释
+            while (j < R && y[j] == yc) {  // 扩展平台直到变化或到 R-1 注释
+                ++j;                       // 继续扩展注释
+            }  // 结束 while 注释
+
+            // j 现在是平台结束后的第一个点索引（可能等于 R）注释
+            // 需要保证平台后面确实下降才算平台峰注释
+            if (j <= R && y[j] < yc) {                                    // 平台后下降注释
+                const int peakIdx = (i + (j - 1)) / 2;                    // 取平台中心点作为峰注释
+                const int k = peakIdx - L;                                // 映射到最小值数组索引注释
+                const double valley = std::max(leftMin[k], rightMin[k]);  // 两侧较高谷底注释
+                const double prom = y[peakIdx] - valley;                  // 显著性注释
+                if (prom >= minProminence) {                              // 显著性过滤注释
+                    PeakCand c;                                           // 候选峰注释
+                    c.idx = peakIdx;                                      // 记录索引注释
+                    c.y = y[peakIdx];                                     // 记录峰值注释
+                    c.prom = prom;                                        // 记录显著性注释
+                    out.push_back(c);                                     // 加入列表注释
+                }  // 结束注释
+            }  // 结束注释
+
+            i = j;     // 跳过整段平台，继续扫描注释
+            continue;  // 继续下一轮注释
+        }  // 结束平台峰分支注释
+
+        // ---- 普通局部峰（包含“尖峰/单点峰”）----
+        const bool isPeak = ((yc >= yl) && (yc > yr)) || ((yc > yl) && (yc >= yr));  // 局部峰条件注释
+        if (isPeak) {                                                                // 如果是局部峰注释
+            const int k = i - L;                                                     // 映射到最小值数组索引注释
+            const double valley = std::max(leftMin[k], rightMin[k]);                 // 两侧较高谷底注释
+            const double prom = yc - valley;                                         // 显著性注释
+            if (prom >= minProminence) {                                             // 显著性过滤注释
+                PeakCand c;                                                          // 候选峰注释
+                c.idx = i;                                                           // 记录索引注释
+                c.y = yc;                                                            // 记录峰值注释
+                c.prom = prom;                                                       // 记录显著性注释
+                out.push_back(c);                                                    // 加入列表注释
+            }  // 结束注释
+        }  // 结束注释
+
+        ++i;  // i 前进注释
+    }  // 结束 while 注释
+}  // 结束注释
+
+// =========================
+// 从候选峰里选出两个“主峰”
+// 规则：prominence 从大到小选，且两峰间距 >= minSepSamples
+// 若候选不足：回退到“全区间最大值 + 去掉附近再找一次最大值”
+// =========================
+static bool findTwoMainPeaksSoftware(const QVector<double>& y, int L, int R,
+                                     double minProminence, int minSepSamples,
+                                     int& outIdx1, int& outIdx2)  // 找两主峰注释
+{
+    outIdx1 = -1;  // 初始化输出注释
+    outIdx2 = -1;  // 初始化输出注释
+
+    const int n = y.size();  // 数据长度注释
+    if (n <= 0)
+        return false;  // 空数据保护注释
+
+    L = qBound(0, L, n - 1);  // 夹紧 L 注释
+    R = qBound(0, R, n - 1);  // 夹紧 R 注释
+    if (L > R)
+        qSwap(L, R);  // 保证 L<=R 注释
+    if (R - L < 2)
+        return false;  // 太短无法找两峰注释
+
+    QVector<PeakCand> cands;                              // 候选峰列表注释
+    collectPeaksSoftware(y, L, R, minProminence, cands);  // 收集候选峰注释
+
+    // ---- 按 prominence 降序排序 ----
+    std::sort(cands.begin(), cands.end(),                 // 排序注释
+              [](const PeakCand& a, const PeakCand& b) {  // 比较函数注释
+                  if (a.prom != b.prom)
+                      return a.prom > b.prom;  // 先比显著性注释
+                  return a.y > b.y;            // 再比峰高注释
+              });                              // 结束注释
+
+    // ---- 选两个相隔足够远的峰 ----
+    for (int i = 0; i < cands.size(); ++i) {  // 遍历候选注释
+        const int p1 = cands[i].idx;          // 第一个峰候选索引注释
+        if (outIdx1 < 0) {                    // 还没选第一个峰注释
+            outIdx1 = p1;                     // 选中第一个峰注释
+            continue;                         // 继续选第二个峰注释
+        }  // 结束注释
+        if (qAbs(p1 - outIdx1) >= minSepSamples) {  // 与第一个峰距离足够注释
+            outIdx2 = p1;                           // 选中第二个峰注释
+            break;                                  // 退出注释
+        }  // 结束注释
+    }  // 结束循环注释
+
+    if (outIdx1 >= 0 && outIdx2 >= 0) {  // 正常找到两峰注释
+        return true;                     // 返回成功注释
+    }  // 结束注释
+
+    // =========================
+    // 回退策略：最大值法找两峰（不依赖局部峰）
+    // 先找全局最大值，再把它附近 minSepSamples 区域“屏蔽”，再找第二大
+    // =========================
+    int idxA = L;                   // 第一峰索引注释
+    double maxA = y[L];             // 第一峰值注释
+    for (int i = L; i <= R; ++i) {  // 扫描区间注释
+        if (y[i] > maxA) {          // 找更大值注释
+            maxA = y[i];            // 更新注释
+            idxA = i;               // 更新注释
+        }  // 结束注释
+    }  // 结束循环注释
+
+    const int banL = qBound(L, idxA - minSepSamples, R);  // 屏蔽左边界注释
+    const int banR = qBound(L, idxA + minSepSamples, R);  // 屏蔽右边界注释
+
+    int idxB = -1;         // 第二峰索引注释
+    double maxB = -1e300;  // 第二峰值注释
+
+    for (int i = L; i <= R; ++i) {  // 再扫一遍注释
+        if (i >= banL && i <= banR)
+            continue;       // 屏蔽区域跳过注释
+        if (y[i] > maxB) {  // 找最大注释
+            maxB = y[i];    // 更新注释
+            idxB = i;       // 更新注释
+        }  // 结束注释
+    }  // 结束循环注释
+
+    if (idxB < 0)
+        return false;  // 仍找不到第二峰注释
+
+    outIdx1 = idxA;  // 输出第一峰注释
+    outIdx2 = idxB;  // 输出第二峰注释
+    return true;     // 返回成功注释
+}  // 结束注释
+
 QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
     QVariantMap r;
 
@@ -429,45 +625,37 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
     for (int i = 0; i < n; ++i)
         y[i] = adcList[i].toDouble();
 
-    // ======================================================================
-    // 2) 固定区间找峰（先 C → 后 T）
-    // ======================================================================
-    int CL = method.C1;
-    int CR = method.C2;
-    int TL = method.T1;
-    int TR = method.T2;
-    //.methodData = QString("C1=%1,C2=%2,T1=%3,T2=%4").arg(CL).arg(CR).arg(TL).arg(TR);
-    // int CL = 550, CR = 700;    // C 区
-    // int TL = 1000, TR = 1160;  // T 区
+    // =========================
+    // 2) 软件判峰：全曲线找两个主峰（左=C，右=T）
+    // =========================
+    const double MIN_PROM = 0.0;  // 显著性阈值注释（稳定数据先用 0）
+    const int MIN_SEP = 300;      // 两峰最小间隔(样点)注释（你指定 300）
 
-    if (CR >= n)
-        CR = n - 1;
-    if (TR >= n)
-        TR = n - 1;
+    int p1 = -1;  // 第一个峰索引注释
+    int p2 = -1;  // 第二个峰索引注释
 
-    // ---- 找 C 峰 ----
-    int idxC = CL;
-    double maxC = y[CL];
-    for (int i = CL; i <= CR; ++i) {
-        if (y[i] > maxC) {
-            maxC = y[i];
-            idxC = i;
-        }
-    }
+    bool ok = findTwoMainPeaksSoftware(y, 0, n - 1, MIN_PROM, MIN_SEP, p1, p2);  // 找两主峰注释
+    if (!ok) {                                                                   // 失败兜底注释
+        qWarning() << "[calcTC] findTwoMainPeaksSoftware failed";                // 打印注释
+        return QVariantMap();                                                    // 返回空注释
+    }  // 结束注释
 
-    // ---- 找 T 峰 ----
-    int idxT = TL;
-    double maxT = y[TL];
-    for (int i = TL; i <= TR; ++i) {
-        if (y[i] > maxT) {
-            maxT = y[i];
-            idxT = i;
-        }
-    }
+    int idxC = std::min(p1, p2);  // 左边峰当 C 注释
+    int idxT = std::max(p1, p2);  // 右边峰当 T 注释
 
     // ---- 峰值 7 点平均 ----
     double C_raw = avgPeak(y, idxC);
     double T_raw = avgPeak(y, idxT);
+    // 打印：C/T 两峰中更大的那个峰位置
+    // =========================
+    int idxMaxCT = idxC;  // 默认先认为 C 更高注释
+    if (y[idxT] > y[idxC])
+        idxMaxCT = idxT;  // 如果 T 更高则取 T 注释
+
+    qDebug() << "[calcTC] maxPeakCT idx=" << idxMaxCT             // 打印最高峰索引注释
+             << " val=" << y[idxMaxCT]                            // 打印最高峰原始值注释
+             << " (C idx=" << idxC << " val=" << y[idxC]          // 顺带打印 C 峰注释
+             << ", T idx=" << idxT << " val=" << y[idxT] << ")";  // 顺带打印 T 峰注释
 
     // ======================================================================
     // 3) 初步 baseline 判断 T 是否存在
@@ -555,106 +743,24 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
     r["concentration"] = concentration;
     r["resultStr"] = resultStr;
 
-    // 日志
-    qInfo() << "[calcTC]"
-            << " idxC=" << idxC
-            << " idxT=" << idxT
-            << " hasT=" << hasT
-            << " baseline=" << baseline
-            << " C_net=" << C_net
-            << " T_net=" << T_net
-            << " ratio=" << ratio
-            << " conc=" << concentration
-            << " resultStr=" << resultStr;
+    // // 日志
+    // qDebug() << "[calcTC]"
+    //          << " idxC=" << idxC
+    //          << " idxT=" << idxT
+    //          << " hasT=" << hasT
+    //          << " baseline=" << baseline
+    //          << " C_net=" << C_net
+    //          << " T_net=" << T_net
+    //          << " ratio=" << ratio
+    //          << " conc=" << concentration
+    //          << " resultStr=" << resultStr;
+    qDebug() << "[calcTC][DBG]"
+             << "range=0.." << (n - 1)                // 本次判峰范围注释
+             << "MIN_SEP=" << MIN_SEP                 // 两峰最小间隔注释
+             << "p1=" << p1 << "y1=" << y[p1]         // 第一个峰注释
+             << "p2=" << p2 << "y2=" << y[p2]         // 第二个峰注释
+             << "idxC=" << idxC << "yC=" << y[idxC]   // C 峰注释
+             << "idxT=" << idxT << "yT=" << y[idxT];  // T 峰注释
 
     return r;
 }
-
-// QVariantMap MainViewModel::calcTC_FixedWindow(const QVariantList& adcList) {
-//     QVariantMap result;
-//     result["hasT"] = false;
-//     result["hasC"] = false;
-//     result["areaT"] = 0.0;
-//     result["areaC"] = 0.0;
-//     result["ratioTC"] = 0.0;
-
-//     const int n = adcList.size();
-//     if (n < 100) {
-//         // 点太少，直接返回
-//         return result;
-//     }
-
-//     // 1) 把 QVariantList 转成 double 数组，方便运算
-//     QVector<double> y(n);
-//     for (int i = 0; i < n; ++i) {
-//         y[i] = adcList[i].toDouble();
-//     }
-
-//     // 2) 固定窗口索引（❗你需要根据自己的卡，自己微调这四个数字）
-//     //   假设峰位置大概是：
-//     //   T 峰：索引在 600~900
-//     //   C 峰：索引在 1500~1800
-//     //   你可以先用 qDebug 把峰位置打印一下，然后改成更合适的值
-//     const int T_START = 600;
-//     const int T_END = 900;
-//     const int C_START = 1500;
-//     const int C_END = 1800;
-
-//     // 防止越界，做一下裁剪
-//     const int tStart = qBound(0, T_START, n - 1);
-//     const int tEnd = qBound(0, T_END, n - 1);
-//     const int cStart = qBound(0, C_START, n - 1);
-//     const int cEnd = qBound(0, C_END, n - 1);
-
-//     if (tEnd <= tStart || cEnd <= cStart) {
-//         return result;  // 窗口非法
-//     }
-
-//     // 3) 计算每个窗口内的“局部基线”（取窗口内最小值）
-//     double baseT = y[tStart];
-//     for (int i = tStart + 1; i <= tEnd; ++i) {
-//         if (y[i] < baseT)
-//             baseT = y[i];
-//     }
-
-//     double baseC = y[cStart];
-//     for (int i = cStart + 1; i <= cEnd; ++i) {
-//         if (y[i] < baseC)
-//             baseC = y[i];
-//     }
-
-//     // 4) 在各自窗口内做简单积分：Σ max(0, y[i] - base)
-//     double areaT = 0.0;
-//     for (int i = tStart; i <= tEnd; ++i) {
-//         double v = y[i] - baseT;  // 去掉局部基线
-//         if (v > 0.0)
-//             areaT += v;  // 直接累加
-//     }
-
-//     double areaC = 0.0;
-//     for (int i = cStart; i <= cEnd; ++i) {
-//         double v = y[i] - baseC;
-//         if (v > 0.0)
-//             areaC += v;
-//     }
-
-//     // 5) 判断有没有峰（面积大于一个门限就认为存在）
-//     const double MIN_AREA = 0.3;  // 这个阈值你可以根据实际噪声调整
-
-//     bool hasT = (areaT > MIN_AREA);
-//     bool hasC = (areaC > MIN_AREA);
-
-//     double ratioTC = 0.0;
-//     if (hasT && hasC && areaC > 0.0) {
-//         ratioTC = areaT / areaC;  // 与别的仪器一样，用面积比值
-//     }
-
-//     // 6) 写回结果，给 QML 用
-//     result["hasT"] = hasT;
-//     result["hasC"] = hasC;
-//     result["areaT"] = areaT;
-//     result["areaC"] = areaC;
-//     result["ratioTC"] = ratioTC;
-
-//     return result;
-// }

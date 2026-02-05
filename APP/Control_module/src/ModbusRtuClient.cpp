@@ -5,6 +5,8 @@
 
 #include <QDebug>
 #include <QThread>
+
+#include "delay.h"
 static inline bool isModbusProtocolExceptionErrno(int e) {
 #ifdef EMBXILFUN
     // 从机异常响应：Illegal function/address/value、Slave failure、Gateway target fail 等
@@ -13,6 +15,10 @@ static inline bool isModbusProtocolExceptionErrno(int e) {
         return true;
 #endif
     return false;
+}
+static inline quint64 tid()  // 获取线程 ID（Qt）
+{
+    return reinterpret_cast<quint64>(QThread::currentThreadId());  // 返回当前线程 ID
 }
 ModbusRtuClient::ModbusRtuClient(QObject* parent)
     : QObject(parent) {
@@ -83,13 +89,13 @@ void ModbusRtuClient::close() {
 bool ModbusRtuClient::reconnect() {
     if (m_connected)
         return true;
-
+    // delay_us(20000 * 100);
     qWarning() << "[MODBUS] reconnect...";
     return open();  // 只尝试一次
 }
 
 bool ModbusRtuClient::writeMulti(const QVector<RegWriteBlock>& blocks) {
-    usleep(1000 * 100);
+    delay_us(1000 * 100);
     QMutexLocker locker(&m_ioMutex);
 
     if (!ensureConnected())
@@ -104,7 +110,7 @@ bool ModbusRtuClient::writeMulti(const QVector<RegWriteBlock>& blocks) {
     return true;
 }
 bool ModbusRtuClient::readMulti(QVector<RegReadBlock>& blocks) {
-    usleep(1000 * 100);
+    delay_us(1000 * 100);
     QMutexLocker locker(&m_ioMutex);
 
     if (!m_connected) {
@@ -116,7 +122,7 @@ bool ModbusRtuClient::readMulti(QVector<RegReadBlock>& blocks) {
 
     for (auto& b : blocks) {
         b.values.resize(b.count);
-        usleep(1000 * 50);
+        delay_us(1000 * 50);
         int rc = modbus_read_registers(
             m_ctx,
             b.startAddr,
@@ -144,7 +150,7 @@ bool ModbusRtuClient::readMulti(QVector<RegReadBlock>& blocks) {
 
 bool ModbusRtuClient::writeRegisters(uint16_t addr,
                                      const QVector<uint16_t>& values) {
-    usleep(1000 * 100);
+    delay_us(1000 * 100);
 
     if (!m_ctx) {
         emit ioError("modbus ctx is null");
@@ -188,7 +194,7 @@ bool ModbusRtuClient::writeRegisters(uint16_t addr,
     return false;
 }
 bool ModbusRtuClient::readRegisters(uint16_t addr, uint16_t count, QVector<uint16_t>& out) {
-    usleep(1000 * 100);
+    delay_us(1000 * 100);
     out.resize(count);  // 先把输出数组扩到需要的寄存器数量
 
     int rc = modbus_read_registers(m_ctx, addr, count, out.data());  // 03 功能码读保持寄存器
@@ -209,24 +215,16 @@ bool ModbusRtuClient::readRegisters(uint16_t addr, uint16_t count, QVector<uint1
         m_connected = false;  // 标记断开，触发下次重连
         return false;         // 这里先返回 false，不要在底层疯狂 reconnect
     }
-
-    // qDebug() << "[MODBUS] read ok"
-    //          << "slave=" << m_slaveId
-    //          << "addr=" << addr
-    //          << "count=" << count
-    //          << "regs=" << out;  // 成功时也把数据打印出来
-
     return true;  // 成功返回 true
 }
 bool ModbusRtuClient::readBlock(uint16_t addr, uint16_t count, QVector<uint16_t>& out) {
-    usleep(1000 * 100);
     QMutexLocker locker(&m_ioMutex);  // 加锁，保证串口互斥
-
+    delay_us(1000 * 100);
     if (!m_connected) {    // 如果当前未连接
         if (!reconnect())  // 尝试重连
             return false;  // 重连失败直接返回
     }
-
+    //  qDebug() << "[MODBUS] readBlock tid=" << tid();  // 打印读线程
     out.resize(count);  // 调整输出数组长度
 
     int rc = modbus_read_registers(m_ctx, addr, count, out.data());  // 读保持寄存器
@@ -288,6 +286,7 @@ bool ModbusRtuClient::readBlock(uint16_t addr, uint16_t count, QVector<uint16_t>
 // }
 void ModbusRtuClient::postWriteRegisters(uint16_t addr,
                                          const QVector<uint16_t>& regs) {
+    qDebug() << "[MODBUS] postWrite tid=" << tid();  // 打印投递执行线程
     if (QThread::currentThread() != this->thread()) {
         QMetaObject::invokeMethod(
             this,
@@ -295,7 +294,7 @@ void ModbusRtuClient::postWriteRegisters(uint16_t addr,
             Qt::QueuedConnection);
         return;
     }
-    usleep(1000 * 100);
+    delay_us(1000 * 100);
     // 必须串口互斥：避免与 writeMulti/readMulti/readBlock 并发
     QMutexLocker locker(&m_ioMutex);
 

@@ -148,9 +148,16 @@ set(SOURCES
     APP/Control_module/src/DeviceProtocol.cpp
     APP/Control_module/src/DeviceService.cpp
     APP/Control_module/src/ModbusRtuClient.cpp
+    APP/Control_module/src/delay.c
     APP/Net/src/TaskQueueWorker.cpp
     APP/Net/src/LabKeyService.cpp
     APP/Net/src/LabKeyClient.cpp
+    APP/wifi/src/WorkerQueue.cpp
+    APP/wifi/src/WiFiController.cpp
+    APP/wifi/src/wifiManage.cpp
+    APP/OTA/src/OtaManager.cpp
+    APP/OTA/src/unzip.cpp
+    APP/OTA/src/sha256.cpp
 )
 
 set(HEADERS
@@ -194,9 +201,16 @@ set(HEADERS
     APP/Control_module/inc/ModbusTypes.h
     APP/Control_module/inc/DeviceState.h
     APP/Control_module/inc/DeviceStatusObject.h
+    APP/Control_module/inc/delay.h
     APP/Net/inc/LabKeyClient.h
     APP/Net/inc/LabKeyService.h
     APP/Net/inc/TaskQueueWorker.h
+    APP/wifi/inc/WiFiController.h
+    APP/wifi/inc/WorkerQueue.h
+    APP/wifi/inc/wifiManage.h
+    APP/OTA/inc/OtaManager.h
+    APP/OTA/inc/unzip.h
+    APP/OTA/inc/sha256.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
@@ -220,6 +234,8 @@ target_include_directories(FluorescenceQuant PRIVATE
     ${CMAKE_SOURCE_DIR}/APP
     ${CMAKE_SOURCE_DIR}/APP/Net/inc
     ${CMAKE_SOURCE_DIR}/APP/Control_module/inc
+    ${CMAKE_SOURCE_DIR}/APP/wifi/inc
+    ${CMAKE_SOURCE_DIR}/APP/OTA/inc
 )
 
 if(${TARGET_BOARD} STREQUAL "全志T113-S3")
@@ -254,4 +270,25 @@ target_link_libraries(FluorescenceQuant PRIVATE
   curl
   ssl
   crypto
+)
+# ===== Minizip-ng =====
+set(MINIZIP_INCLUDE_DIRS
+    /cross-compilation/sysroots/quanzhi-t113-s3/thridPath/minizip-ng/install/include
+)
+
+set(MINIZIP_LIBRARIES
+    /cross-compilation/sysroots/quanzhi-t113-s3/thridPath/minizip-ng/install/lib/libminizip.a
+)
+
+message(STATUS "Minizip include: ${MINIZIP_INCLUDE_DIRS}")
+message(STATUS "Minizip lib: ${MINIZIP_LIBRARIES}")
+
+target_include_directories(FluorescenceQuant
+    PRIVATE
+    ${MINIZIP_INCLUDE_DIRS}
+)
+
+target_link_libraries(FluorescenceQuant
+    PRIVATE
+    ${MINIZIP_LIBRARIES}
 )

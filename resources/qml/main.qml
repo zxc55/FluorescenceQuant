@@ -238,8 +238,8 @@ Timer {
        
       //  console.log("[MotorCheck] motorState =", motor_state)
 
-        if (motor_state === 4) {   // ✅ 电机就绪
-            console.log("✅ 电机状态=5，开始检测")
+        if (motor_state === 8) {   // ✅ 电机就绪
+      //      console.log("✅ 电机状态=5，开始检测")
 
             stop()
             doStartTest()    // 真正执行检测流程
@@ -250,7 +250,7 @@ function startTest() {
     console.log("▶ 请求开始检测")
     console.log("当前 motor_state =", motor_state)
 
-    if (motor_state !== 4) {
+    if (motor_state !== 8) {
         // 可选 UI 提示
         overlayText = "电机准备中，请稍候..."
         overlayBusy = true
@@ -279,6 +279,7 @@ Timer {
         }
     }
 }
+
 function doStartTest() {
     // === 启动 ADS1115 连续采集 ===]
       var curNo = tfSampleId.text
@@ -294,7 +295,7 @@ function doStartTest() {
     mainViewModel.startReading()
     console.log("🧪[" + nowStr() + "] 启动连续采集")
     console.log("▶ 请求开始检测，等待电机停止")
-
+    deviceService.motorStart_2()
     waitMotorStopTimer.start()
 }
 function doStartTestInternal()
@@ -1476,7 +1477,7 @@ function doStartTestInternal()
                         id: systemPage
                         property int sysIndex: 0       // 当前子页面
                         Layout.fillWidth: true
-
+                        
                         Column {
                             anchors.fill: parent
                             anchors.margins: 16
@@ -1518,11 +1519,11 @@ function doStartTestInternal()
                                     }
                                 }
 
-                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "功能设置"; item.idx = 0 } }
-                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "工具";     item.idx = 1 } }
-                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "厂家信息"; item.idx = 2 } }
-                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "关于仪器"; item.idx = 3 } }
-                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "恢复出厂"; item.idx = 4 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "功能设置";  item.idx = 0 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "无线局域网";item.idx = 1 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "厂家信息";  item.idx = 2 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "关于仪器";  item.idx = 3 } }
+                                Loader { sourceComponent: sysBtnComp; onLoaded: { item.text = "恢复出厂";  item.idx = 4 } }
                             }
                             Rectangle {// 系统设置右侧大白框
                                 id: sysContent                      // 内容区域 id
@@ -1799,15 +1800,18 @@ function doStartTestInternal()
                                             }
                                         }
                                     }
-                                    // 1️⃣ 工具
-                                    Item {
-                                        Label {
-                                            text: "工具页（待填）"
-                                            anchors.centerIn: parent
-                                            font.pixelSize: 22
-                                            color: "#6b7280"
-                                              }
-                                    }
+                                    // // 1️⃣ 工具
+                                    // Item {
+                                    //     Label {
+                                    //         text: "工具页（待填）"
+                                    //         anchors.centerIn: parent
+                                    //         font.pixelSize: 22
+                                    //         color: "#6b7280"
+                                    //           }
+                                    // }
+                                      WifiPage  {
+                                                    id: wifiPage
+                                                }
                                     // 2️⃣ 厂家信息
                                     Item {
                                         id: manufacturerInfoPage
@@ -1875,14 +1879,9 @@ function doStartTestInternal()
                                         }
                                     }
                                     // 3️⃣ 关于仪器
-                                    Item {
-                                        Label {
-                                            text: "关于仪器（待填）"
-                                            anchors.centerIn: parent
-                                            font.pixelSize: 22
-                                            color: "#6b7280"
+                                OtaPage {
+                                            id: otaPage
                                         }
-                                    }
                                     // 4️⃣ 恢复出厂
                                     Item {
                                         Label {
@@ -1895,7 +1894,7 @@ function doStartTestInternal()
                                     }
                                 }
                             }
-                        }
+                     }
                     }
                  }
              }

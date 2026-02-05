@@ -57,6 +57,13 @@ void DeviceService::motorStart() {
 
     exec({it});
 }
+void DeviceService::motorStart_2() {
+    ExecItem it;
+    it.func = DevFunc::MotorStart;
+    it.value = 2;  // 写 1 触发
+
+    exec({it});
+}
 // 或者如果你设备协议要求整数（比如 单位是 0.1℃，传 365 表示 36.5℃）
 void DeviceService::setTargetTemperature(float temperature) {
     ExecItem it;
@@ -240,13 +247,14 @@ void DeviceService::threadLoop() {
                         break;
                     }
                     case DevFunc::MotorStart: {
+                        int state = it.value.toInt();
                         QVector<uint16_t> regs1;
-                        regs1 << 1;  // 写 1
+                        regs1.append(static_cast<uint16_t>(state));
 
                         constexpr uint16_t START_ADDR = 21;
                         m_worker->postWriteRegisters(START_ADDR, regs1);
+                        qDebug() << "[DeviceService] write start =" << state;
 
-                        qDebug() << "[DeviceService] write start = 1";
                         break;
                     }
                     case DevFunc::EnableFluorescence: {

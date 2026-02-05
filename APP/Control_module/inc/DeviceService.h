@@ -32,6 +32,7 @@ public:
     Q_INVOKABLE void ENFLALED(int enable);
     Q_INVOKABLE void exec(const QVector<ExecItem>& items);
     Q_INVOKABLE void motorStart();
+    Q_INVOKABLE void motorStart_2();
     Q_INVOKABLE void setTargetTemperature(float temperature);
     Q_INVOKABLE void setIncubationTime(int seconds);
     DeviceStatusObject* status() { return &m_statusObj; }
