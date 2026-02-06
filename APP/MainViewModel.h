@@ -26,6 +26,10 @@ public:
         double B;  // 斜率
         double C;  // 中点浓度
         double D;  // 曲线低端（高浓度）
+        int C1;
+        int C2;
+        int T1;
+        int T2;
     };
     void setMethodConfigVm(QrMethodConfigViewModel* vm);
 public slots:

@@ -2,6 +2,7 @@
 #include <linux/input-event-codes.h>
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QFile>

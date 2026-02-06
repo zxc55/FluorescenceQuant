@@ -386,17 +386,19 @@ static bool parseFourPLFromJson(const QString& json,
     out.B = o.value("B").toDouble(0.0);
     out.C = o.value("C").toDouble(0.0);
     out.D = o.value("D").toDouble(0.0);
-
+    out.C1 = o.value("C1").toInt(0);
+    out.C2 = o.value("C2").toInt(0);
+    out.T1 = o.value("T1").toInt(0);
+    out.T2 = o.value("T2").toInt(0);
     // 4. 基本合法性校验（工程必须）
     if (out.C <= 0.0 || std::fabs(out.B) < 1e-9) {
-        qWarning() << "[FourPL] invalid params:"
-                   << "A=" << out.A
-                   << "B=" << out.B
-                   << "C=" << out.C
-                   << "D=" << out.D;
+        qDebug() << "[FourPL] invalid params:"
+                 << "A=" << out.A
+                 << "B=" << out.B
+                 << "C=" << out.C
+                 << "D=" << out.D;
         return false;
     }
-
     return true;
 }
 
@@ -713,14 +715,15 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
     // 7) 四参数浓度
     // ======================================================================
     double concentration = fourPL_inverse(ratio, curve);
-
+    qDebug() << "--------concentration = " << concentration;
     // ======================================================================
     // 8) ★★★ 只有两个结果：阳性 / 阴性 ★★★
     // ======================================================================
     const double CUTOFF = 0.20;  // ← 竞争法典型阈值
-
+    if (concentration > method.C2)
+        concentration = method.C2;
     QString resultStr;
-    if (ratio < CUTOFF)
+    if (concentration > method.C1)
         resultStr = "阳性";
     else
         resultStr = "阴性";

@@ -70,28 +70,73 @@ ApplicationWindow {
             }
         }
     }
+
     // =====================================================
     // 登录遮罩层
     // =====================================================
     Rectangle {
         id: loginLayer
         anchors.fill: parent
-        color: "#AA000000"    // 半透明黑色遮罩
-        z: 999                // 始终覆盖最前面
-        visible: true         // 程序启动时显示登录界面
-           // 防止所有点击穿透背景
+        color: "#AA000000"                                // 半透明黑色遮罩
+        z: 999                                            // 始终覆盖最前面
+        visible: true                                     // 程序启动时显示登录界面
+
+        property real kbHeight: 0                         // 当前键盘高度（用于判断遮挡）
+        property real liftY: 0                            // 弹窗需要上移的距离（像素）
+
+        function updateKbHeight() {                       // 更新键盘高度（兼容不同平台）
+            var h1 = panel.implicitHeight                 // InputPanel 自己的隐式高度（通常可靠）
+            var h2 = Qt.inputMethod.keyboardRectangle.height // 输入法上报的键盘高度（某些平台可能为 0）
+            kbHeight = Qt.inputMethod.visible ? Math.max(h1, h2) : 0 // 键盘显示就取最大值，否则为 0
+        }
+
+        function adjustLoginPanel() {                     // 调整登录框位置，避免被键盘遮挡
+            updateKbHeight()                              // 先刷新键盘高度
+
+            if (!Qt.inputMethod.visible) {                // 键盘没显示
+                liftY = 0                                 // 复位：不抬起
+                return                                    // 结束
+            }
+
+            var margin = 12                               // 预留边距（让输入框离键盘上沿有点空隙）
+            var kbTop = loginLayer.height - kbHeight      // 键盘上沿 Y（相对 loginLayer）
+
+            // 取密码输入框“底部”在 loginLayer 里的坐标
+            var p = passwordField.mapToItem(loginLayer, 0, passwordField.height) // 映射底部点
+            var fieldBottomY = p.y                        // 输入框底部 Y
+
+            var needLift = fieldBottomY + margin - kbTop  // 需要上移多少才能露出来（>0 表示被挡住）
+            if (needLift < 0) needLift = 0                // 没挡住就不抬
+
+            // 计算最大可上移（避免弹窗顶到屏幕外）
+            var baseTop = (loginLayer.height - panel_login.height) / 2 // 居中时弹窗顶部
+            var maxLift = baseTop - 20                    // 顶部至少留 20px
+            if (maxLift < 0) maxLift = 0                  // 防止负数
+
+            if (needLift > maxLift) needLift = maxLift    // 限幅：别抬过头
+            liftY = needLift                              // 应用上移量
+        }
+
+        // 防止所有点击穿透背景
         MouseArea {
             anchors.fill: parent
-            onClicked: {}      // 什么都不做 → 阻断事件
+            onClicked: {}                                 // 什么都不做 → 阻断事件
         }
-        //登录界面
+
+        // 登录界面
         Rectangle {
             id: panel_login
             width: 380
             height: 260
             radius: 20
             color: "white"
-            anchors.centerIn: parent
+
+            anchors.centerIn: parent                      // 仍然居中
+            anchors.verticalCenterOffset: -loginLayer.liftY // ★ 关键：用 liftY 向上抬
+
+            Behavior on anchors.verticalCenterOffset {    // ★ 动画：看起来就是“上弹”
+                NumberAnimation { duration: 180 }         // 动画时长
+            }
 
             Column {
                 anchors.centerIn: parent
@@ -116,6 +161,12 @@ ApplicationWindow {
                     width: 260
                     echoMode: TextInput.Password
                     placeholderText: "密码"
+
+                    onActiveFocusChanged: {               // ★ 点进密码框时，确保不被遮
+                        if (activeFocus) {                // 获得焦点
+                            Qt.callLater(loginLayer.adjustLoginPanel) // 下一帧再算（避免布局未更新）
+                        }
+                    }
                 }
 
                 Button {
@@ -129,6 +180,20 @@ ApplicationWindow {
                 }
             }
         }
+
+        Connections {                                     // ★ 监听键盘显隐/尺寸变化
+            target: Qt.inputMethod
+            onVisibleChanged: {                           // 键盘弹出/收起
+                Qt.callLater(loginLayer.adjustLoginPanel) // 触发调整
+            }
+            onKeyboardRectangleChanged: {                 // 键盘高度变化（有的平台会触发）
+                Qt.callLater(loginLayer.adjustLoginPanel) // 触发调整
+            }
+        }
+
+        Component.onCompleted: {                          // ★ 启动时同步一次
+            Qt.callLater(loginLayer.adjustLoginPanel)     // 防止初始状态异常
+        }
     }
 
     // 键盘面板
@@ -139,8 +204,87 @@ ApplicationWindow {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         visible: Qt.inputMethod.visible
-       // parent: win
+
+        onVisibleChanged: {                               // ★ 键盘显隐变化时也触发调整
+            Qt.callLater(loginLayer.adjustLoginPanel)     // 让登录框跟着动
+        }
+        onImplicitHeightChanged: {                        // ★ 键盘高度变化时触发（更稳）
+            Qt.callLater(loginLayer.adjustLoginPanel)     // 让登录框跟着动
+        }
     }
+
+
+    // // =====================================================
+    // // 登录遮罩层
+    // // =====================================================
+    // Rectangle {
+    //     id: loginLayer
+    //     anchors.fill: parent
+    //     color: "#AA000000"    // 半透明黑色遮罩
+    //     z: 999                // 始终覆盖最前面
+    //     visible: true         // 程序启动时显示登录界面
+    //        // 防止所有点击穿透背景
+    //     MouseArea {
+    //         anchors.fill: parent
+    //         onClicked: {}      // 什么都不做 → 阻断事件
+    //     }
+    //     //登录界面
+    //     Rectangle {
+    //         id: panel_login
+    //         width: 380
+    //         height: 260
+    //         radius: 20
+    //         color: "white"
+    //         anchors.centerIn: parent
+
+    //         Column {
+    //             anchors.centerIn: parent
+    //             spacing: 18
+
+    //             Text {
+    //                 text: "用户登录"
+    //                 font.pixelSize: 26
+    //                 font.bold: true
+    //                 color: "#333"
+    //             }
+
+    //             ComboBox {
+    //                 id: usernameField
+    //                 width: 260
+    //                 model: ["admin", "eng", "op"]
+    //                 currentIndex: 0
+    //             }
+
+    //             TextField {
+    //                 id: passwordField
+    //                 width: 260
+    //                 echoMode: TextInput.Password
+    //                 placeholderText: "密码"
+    //             }
+
+    //             Button {
+    //                 width: 260
+    //                 text: "登录"
+
+    //                 onClicked: {
+    //                     var user = usernameField.model[usernameField.currentIndex]
+    //                     userVm.login(user, passwordField.text)
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    // // 键盘面板
+    // InputPanel {
+    //     id: panel
+    //     z: 9999
+    //     anchors.left: parent.left
+    //     anchors.right: parent.right
+    //     anchors.bottom: parent.bottom
+    //     visible: Qt.inputMethod.visible
+    //    // parent: win
+    // }
     //顶部栏
     Rectangle {
         id: topBar

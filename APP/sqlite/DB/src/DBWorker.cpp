@@ -483,15 +483,15 @@ void DBWorker::doLoadQrMethodConfigs() {
         r.T2 = q.value(10).toInt();  // T2
 
         // // === 调试日志（建议保留，定位 DB 问题非常有用） ===
-        // qDebug() << "[DBWorker] method row:"
-        //          << "id=" << r.id
-        //          << "methodData.len=" << r.methodData.length()
-        //          << "C1=" << r.C1
-        //          << "T1=" << r.T1
-        //          << "C2=" << r.C2
-        //          << "T2=" << r.T2
-        //          << "temperature=" << r.temperature
-        //          << "time_Sec=" << r.timeSec;
+        qDebug() << "[DBWorker] method row:"
+                 << "id=" << r.id
+                 << "methodData.len=" << r.methodData.length()
+                 << "C1=" << r.C1
+                 << "T1=" << r.T1
+                 << "C2=" << r.C2
+                 << "T2=" << r.T2
+                 << "temperature=" << r.temperature
+                 << "time_Sec=" << r.timeSec;
 
         rows.push_back(r);
     }
