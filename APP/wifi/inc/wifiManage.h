@@ -39,5 +39,6 @@ public:
     // Get the currently connected WiFi SSID
     std::string getCurrentWiFiSSID();
     void statrt_uchcpc(int timeout, int num_retries);
+    bool isWifiConnected();
 };
 #endif  // _WIFIMANAGE_H_

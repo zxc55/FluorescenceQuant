@@ -339,7 +339,7 @@ function doStartTestInternal()
     var unit     = tfLab.text               // 检测单位
     var person   = tfOperator.text          // 检测人
     var dilution = dilutionBox.currentText  // 稀释倍数
-
+    console.log("结果：", result)
     // === 组装记录对象 ===
     var record = {
                 "projectId": projectId,
@@ -376,18 +376,22 @@ function doStartTestInternal()
                 "CurveFormula": "1",         // 默认
                 "DilutionFactor": Number(dilution)
             }
+        
         labkeyService.uploadRun(uploadRecord)
         console.log("[DEBUG] 即将写入数据库:", JSON.stringify(record))
 
         // === 写入数据库 ===
         var ok = projectsVm.insertProjectInfo(record)
         console.log(ok ? "[DB] 插入成功 ✅" : "[DB] 插入失败 ❌")
-
+        var concStr = (isFinite(conc) ? conc.toFixed(3) : "0.00")
         // === 界面提示完成 ===
-        overlayText = ok ? "检测完成，数据已保存 ✅" : "检测完成，但数据库写入失败 ❌"
+       overlayText = ok                                                   // 根据数据库写入结果决定提示文本
+        ? ("检测完成，数据已保存 \n浓度：" + concStr)              // 成功：提示 + 浓度
+        : ("检测完成，但数据库写入失败 \n浓度：" + concStr)        // 失败：提示 + 浓度
         overlayBusy = false
         overlayVisible = true
         testRunning = false
+        historyVm.refresh()
         if(settingsVm.autoPrint)
         {
             console.log( " 启动打印 ✅" )
@@ -1885,7 +1889,7 @@ function doStartTestInternal()
                                     // 4️⃣ 恢复出厂
                                     Item {
                                         Label {
-                                            text: "恢复出厂（待填）"
+                                            text: ""
                                             anchors.centerIn: parent
                                             font.pixelSize: 22
                                             color: "red"

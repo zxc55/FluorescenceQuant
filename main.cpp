@@ -140,7 +140,7 @@ static void setupQtDpi() {
 int main(int argc, char* argv[]) {
     setupQtDpi();
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
-
+    qDebug() << "---------------version : 1.0.4--------------";
 #ifndef LOCAL_BUILD
     // 输入法 / 触摸驱动
     qputenv("QT_QPA_PLATFORM",
@@ -165,7 +165,7 @@ int main(int argc, char* argv[]) {
 
     QApplication app(argc, argv);
     QApplication::setOverrideCursor(Qt::BlankCursor);
-    qDebug() << "Version: 1.0.1";
+
     // ======================
     // 注册跨线程的元类型
     // ======================

@@ -1,15 +1,20 @@
 #include "OtaManager.h"
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QStandardPaths>
+#include <QString>
+#include <QStringList>
+#include <climits>
+#include <thread>
 
 #include "sha256.h"
 #include "unzip.h"
-
 // ================== OTA 调试开关 ==================
 #define OTA_DEBUG 1
 
@@ -40,8 +45,14 @@ OtaManager::OtaManager(QObject* parent)
     : QObject(parent) {
     OTA_LOG("OtaManager constructed");
     loadLocalVersion();
+    otaThread_ = std::thread(&OtaManager::otaThreadLoop, this);
 }
-
+OtaManager::~OtaManager() {
+    otaExit_ = true;
+    otaCv_.notify_one();
+    if (otaThread_.joinable())
+        otaThread_.join();
+}
 // ================== 执行 shell 命令 ==================
 QString OtaManager::exec(const QString& cmd) {
     OTA_LOG("exec:" << cmd);
@@ -66,29 +77,30 @@ QString OtaManager::exec(const QString& cmd) {
 bool OtaManager::loadLocalVersion() {
     OTA_LOG("loadLocalVersion");
 
-    QDir().mkpath(OTA_STATE_DIR);
+    // QDir().mkpath(OTA_STATE_DIR);
 
-    QFile f(OTA_STATE_FILE);
-    if (!f.open(QIODevice::ReadOnly)) {
-        OTA_LOG("state file not exist, init default version");
+    // QFile f(OTA_STATE_FILE);
+    // if (!f.open(QIODevice::ReadOnly)) {
+    //     OTA_LOG("state file not exist, init default version");
 
-        curTitle = "FLA_T113";
-        curVersion = "1.0.0";
-        return saveLocalVersion();
-    }
+    //     curTitle = "FLA_T113";
+    //     curVersion = "1.0.0";
+    //     return saveLocalVersion();
+    // }
 
-    QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-    f.close();
+    // QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    // f.close();
 
-    if (!doc.isObject()) {
-        OTA_LOG("state file json invalid");
-        return false;
-    }
+    // if (!doc.isObject()) {
+    //     OTA_LOG("state file json invalid");
+    //     return false;
+    // }
 
-    QJsonObject o = doc.object();
-    curTitle = o.value("title").toString();
-    curVersion = o.value("version").toString();
-
+    // QJsonObject o = doc.object();
+    // curTitle = o.value("title").toString();
+    // curVersion = o.value("version").toString();
+    curTitle = APP_TITLE;
+    curVersion = APP_VERSION;
     OTA_LOG("local version:" << curTitle << curVersion);
     return true;
 }
@@ -132,7 +144,8 @@ void OtaManager::checkUpdate() {
     if (!queryAttributes()) {
         OTA_LOG("no update needed");
         emit info("当前已是最新版本");
-        emit finished(true);
+        // emit finished(true);
+        emit NoUpdate();
         return;
     }
 
@@ -140,7 +153,107 @@ void OtaManager::checkUpdate() {
     OTA_LOG("local  version:" << curTitle << curVersion);
 
     emit info(QString("发现新版本 %1").arg(fwVersion));
+    emit updateAvailable(fwVersion);
+    // // 3. 上报 DOWNLOADING
+    // exec(QString(
+    //          "curl -s -X POST %1/api/v1/%2/telemetry "
+    //          "-H \"Content-Type: application/json\" "
+    //          "-d '{\"fw_state\":\"DOWNLOADING\"}'")
+    //          .arg(TB_HOST, TB_TOKEN));
 
+    // // 4. 下载固件包
+    // if (!downloadPackage()) {
+    //     OTA_LOG("download failed");
+
+    //     exec(QString(
+    //              "curl -s -X POST %1/api/v1/%2/telemetry "
+    //              "-H \"Content-Type: application/json\" "
+    //              "-d '{\"fw_state\":\"FAILED\",\"fw_error\":\"download failed\"}'")
+    //              .arg(TB_HOST, TB_TOKEN));
+
+    //     emit error("下载失败");
+    //     emit finished(false);
+    //     return;
+    // }
+
+    // // 5. 上报 DOWNLOADED
+    // exec(QString(
+    //          "curl -s -X POST %1/api/v1/%2/telemetry "
+    //          "-H \"Content-Type: application/json\" "
+    //          "-d '{\"fw_state\":\"DOWNLOADED\"}'")
+    //          .arg(TB_HOST, TB_TOKEN));
+
+    // // 6. 校验固件包
+    // if (!verifyPackage()) {
+    //     OTA_LOG("verify failed");
+
+    //     exec(QString(
+    //              "curl -s -X POST %1/api/v1/%2/telemetry "
+    //              "-H \"Content-Type: application/json\" "
+    //              "-d '{\"fw_state\":\"FAILED\",\"fw_error\":\"verify failed\"}'")
+    //              .arg(TB_HOST, TB_TOKEN));
+
+    //     emit error("升级包校验失败");
+    //     emit finished(false);
+    //   return;
+    // }
+
+    // // 7. VERIFIED
+    // exec(QString(
+    //          "curl -s -X POST %1/api/v1/%2/telemetry "
+    //          "-H \"Content-Type: application/json\" "
+    //          "-d '{\"fw_state\":\"VERIFIED\"}'")
+    //          .arg(TB_HOST, TB_TOKEN));
+
+    // emit info("开始升级，请勿断电");
+
+    // // 8. UPDATING
+    // exec(QString(
+    //          "curl -s -X POST %1/api/v1/%2/telemetry "
+    //          "-H \"Content-Type: application/json\" "
+    //          "-d '{\"fw_state\":\"UPDATING\"}'")
+    //          .arg(TB_HOST, TB_TOKEN));
+
+    // // 9. 执行升级脚本
+    // if (!applyUpdate()) {
+    //     OTA_LOG("applyUpdate failed");
+
+    //     exec(QString(
+    //              "curl -s -X POST %1/api/v1/%2/telemetry "
+    //              "-H \"Content-Type: application/json\" "
+    //              "-d '{\"fw_state\":\"FAILED\",\"fw_error\":\"apply failed\"}'")
+    //              .arg(TB_HOST, TB_TOKEN));
+
+    //     emit error("升级脚本执行失败");
+    //     emit finished(false);
+    //     return;
+    // }
+
+    // // 10. 升级成功，保存本地版本
+    // curTitle = fwTitle;
+    // curVersion = fwVersion;
+    // saveLocalVersion();
+
+    // // 11. UPDATED
+    // exec(QString(
+    //          "curl -s -X POST %1/api/v1/%2/telemetry "
+    //          "-H \"Content-Type: application/json\" "
+    //          "-d '{"
+    //          "\"fw_state\":\"UPDATED\","
+    //          "\"current_fw_title\":\"%3\","
+    //          "\"current_fw_version\":\"%4\""
+    //          "}'")
+    //          .arg(TB_HOST, TB_TOKEN, curTitle, curVersion));
+
+    // OTA_LOG("update success");
+
+    // emit info("升级完成，重启生效");
+    // emit finished(true);
+    // emit versionChanged();
+}
+void OtaManager::startUpdate() {
+    emit info("升级中请勿断电");
+    QCoreApplication::processEvents();
     // 3. 上报 DOWNLOADING
     exec(QString(
              "curl -s -X POST %1/api/v1/%2/telemetry "
@@ -215,12 +328,12 @@ void OtaManager::checkUpdate() {
         emit finished(false);
         return;
     }
-
+    qDebug("startUpdate --------------------------------success");
     // 10. 升级成功，保存本地版本
     curTitle = fwTitle;
     curVersion = fwVersion;
     saveLocalVersion();
-
+    qDebug("saveLocalVersion success");
     // 11. UPDATED
     exec(QString(
              "curl -s -X POST %1/api/v1/%2/telemetry "
@@ -306,9 +419,10 @@ bool OtaManager::verifyPackage() {
         return false;
     }
     SHA256 sha;
-    const std::string filePath = OTA_PKG.toStdString();
+    // const std::string filePath = OTA_PKG.toStdString();
 
-    std::string localHash = sha.calculateSHA256FromFile(filePath);
+    std::string localHash = sha.calculateSHA256FromFile(
+        OTA_PKG.toStdString());
 
     if (localHash.empty()) {
         OTA_LOG("SHA256 calculate failed");
@@ -329,7 +443,6 @@ bool OtaManager::verifyPackage() {
 }
 
 // ================== 执行升级脚本（SD 卡） ==================
-#include "unzip.h"
 
 bool OtaManager::applyUpdate() {
     OTA_LOG("applyUpdate begin");
@@ -423,4 +536,47 @@ bool OtaManager::applyUpdate() {
     OTA_LOG("script return:" << ret);
 
     return ret == 0;
+}
+void OtaManager::startUpdateAsync() {
+    OTA_LOG("startUpdateAsync");
+
+    // 把 startUpdate 投递回 OtaManager 所在线程（GUI）
+    QMetaObject::invokeMethod(
+        this,
+        "startUpdate",
+        Qt::QueuedConnection);
+}
+void OtaManager::requestStartUpdate() {
+    OTA_LOG("requestStartUpdate");
+
+    {
+        std::lock_guard<std::mutex> lock(otaMutex_);
+        otaTaskPending_ = true;
+    }
+    otaCv_.notify_one();
+}
+void OtaManager::otaThreadLoop() {
+    OTA_LOG("OTA worker thread started");
+
+    while (!otaExit_) {
+        std::unique_lock<std::mutex> lock(otaMutex_);
+
+        // 没任务就睡
+        otaCv_.wait(lock, [&]() {
+            return otaTaskPending_ || otaExit_;
+        });
+
+        if (otaExit_)
+            break;
+
+        otaTaskPending_ = false;
+        lock.unlock();
+
+        OTA_LOG("OTA worker wakeup, startUpdate");
+
+        // ⚠️ 这里是真正跑升级的地方
+        startUpdate();
+    }
+
+    OTA_LOG("OTA worker thread exit");
 }

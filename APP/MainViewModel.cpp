@@ -744,16 +744,16 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
     r["resultStr"] = resultStr;
 
     // // 日志
-    // qDebug() << "[calcTC]"
-    //          << " idxC=" << idxC
-    //          << " idxT=" << idxT
-    //          << " hasT=" << hasT
-    //          << " baseline=" << baseline
-    //          << " C_net=" << C_net
-    //          << " T_net=" << T_net
-    //          << " ratio=" << ratio
-    //          << " conc=" << concentration
-    //          << " resultStr=" << resultStr;
+    qDebug() << "[calcTC]"
+             << " idxC=" << idxC
+             << " idxT=" << idxT
+             << " hasT=" << hasT
+             << " baseline=" << baseline
+             << " C_net=" << C_net
+             << " T_net=" << T_net
+             << " ratio=" << ratio
+             << " conc=" << concentration
+             << " resultStr=" << resultStr;
     qDebug() << "[calcTC][DBG]"
              << "range=0.." << (n - 1)                // 本次判峰范围注释
              << "MIN_SEP=" << MIN_SEP                 // 两峰最小间隔注释

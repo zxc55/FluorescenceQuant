@@ -2,13 +2,16 @@
 
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "qdebug.h"
 // #include "src/threads/errorProcess/errorProcess.h"
@@ -372,4 +375,24 @@ std::string WiFiManage::getCurrentWiFiSSID() {
         }
     }
     return "";  // Return empty string if no SSID is found
+}
+bool WiFiManage::isWifiConnected() {
+    std::string st;
+    try {
+        st = executeCommand("wpa_cli -p /tmp/lock/wpa_supplicant -i wlan0 status 2>/dev/null");
+    } catch (...) {
+        return false;
+    }
+
+    if (st.find("wpa_state=COMPLETED") == std::string::npos)
+        return false;
+
+    std::string ip;
+    try {
+        ip = executeCommand("ip -4 addr show dev wlan0 2>/dev/null || /sbin/ip -4 addr show dev wlan0 2>/dev/null || /usr/sbin/ip -4 addr show dev wlan0 2>/dev/null");
+    } catch (...) {
+        return false;
+    }
+
+    return (ip.find("inet ") != std::string::npos);
 }

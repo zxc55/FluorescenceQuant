@@ -142,3 +142,6 @@ QString WiFiController::currentIp() {
     QString ip = QString::fromLocal8Bit(p.readAllStandardOutput()).trimmed();
     return ip;
 }
+bool WiFiController::isWifiConnected() {
+    return m_wifi.isWifiConnected();
+}

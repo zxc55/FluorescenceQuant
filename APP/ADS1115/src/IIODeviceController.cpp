@@ -29,16 +29,19 @@ void IIODeviceController::start() {
     reader_->setWatermark(watermark_);
     reader_->setBufferLength(bufLen_);
     reader_->setMovingAverage(true, 10);
-    if (!trigName_.isEmpty())
+    if (!trigName_.isEmpty()) {
         reader_->setTriggerName(trigName_);
-
+        qDebug() << " IIODeviceController name is Empty";
+    }
     if (!reader_->start()) {
         emit logMessage("❌ IIO buffer/trigger 启动失败，请检查 trigger 与权限");
+        qDebug() << "IIO buffer/trigger 启动失败";
     } else {
         emit logMessage(QStringLiteral("✅ IIO 启动: %1Hz, watermark=%2, buf=%3")
                             .arg(targetHz_)
                             .arg(watermark_)
                             .arg(bufLen_));
+        qDebug() << "IIO 启动: " << targetHz_ << "Hz, watermark=" << watermark_ << ", buf=" << bufLen_;
     }
 }
 

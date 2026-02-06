@@ -33,11 +33,13 @@ public:
     Q_INVOKABLE void scan();
     Q_INVOKABLE QString currentSSID();
     Q_INVOKABLE QString currentIp();
+    Q_INVOKABLE bool isWifiConnected();
 signals:
     void connected(const QString& ssid);
     void connectFailed_1(const QString& ssid, const QString& reason);
     void connectFailed(const QString& reason);
     void scanFinished(const QVariantList& list);
+    void defaultWifiResult(const bool wifi_state);
 
 private:
     // WiFi 任务类型
@@ -49,7 +51,8 @@ private:
         ConnectWithPassword,
         Connect,
         StartUdh,
-        Scan
+        Scan,
+        Get_wlan
     };
 
     // 任务结构
