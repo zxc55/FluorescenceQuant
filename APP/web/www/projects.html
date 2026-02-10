@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>项目列表</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <main class="container">
+    <nav class="top-nav">
+      <a class="active" href="/projects">项目列表</a>
+      <a href="/detect">检测详情</a>
+    </nav>
+
+    <section class="panel">
+      <h1>项目列表</h1>
+      <div class="toolbar">
+        <label>
+          关键词
+          <input id="keywordInput" type="text" value="" placeholder="样品编号/项目名称/样品名称" />
+        </label>
+        <button id="searchBtn" type="button">查询</button>
+        <button id="resetBtn" type="button">重置</button>
+        <button id="exportBtn" type="button">导出已勾选.xls</button>
+      </div>
+      <p id="summaryText" class="hint"></p>
+      <p id="selectedInfo" class="hint"></p>
+      <p id="projectError" class="error"></p>
+      <div id="projectTableWrap" class="table-wrap">
+        <table class="project-table">
+          <thead>
+            <tr>
+              <th>
+                <input id="selectPageCheckbox" class="table-check" type="checkbox" aria-label="全选当前页" title="全选当前页" />
+              </th>
+              <th>样品编号</th>
+              <th>项目名称</th>
+              <th>样品来源</th>
+              <th>样品名称</th>
+              <th>检测浓度</th>
+              <th>参考值</th>
+              <th>C</th>
+              <th>T</th>
+              <th>C/T比值</th>
+              <th>检测结果</th>
+              <th>检测时间</th>
+              <th>检测人</th>
+              <th>标准曲线</th>
+              <th>批次号</th>
+              <th>稀释倍数</th>
+            </tr>
+          </thead>
+          <tbody id="projectRows"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="prevBtn" type="button">上一页</button>
+        <span id="pageInfo" class="hint"></span>
+        <button id="nextBtn" type="button">下一页</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/assets/projects.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/sw.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>

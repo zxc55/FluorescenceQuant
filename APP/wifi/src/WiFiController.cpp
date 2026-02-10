@@ -81,6 +81,7 @@ void WiFiController::executeTask(const Task& task) {
         int ret = m_wifi.connectToWiFi(task.ssid);
         if (ret == 0) {
             emit connected(QString::fromStdString(task.ssid));
+            qDebug() << "----已连接----" << QString::fromStdString(task.ssid);
         } else {
             emit connectFailed("连接已保存网络失败");
         }
@@ -91,6 +92,7 @@ void WiFiController::executeTask(const Task& task) {
         int ret = m_wifi.connectToWiFi(task.ssid, task.password);
         if (ret == 0) {
             emit connected(QString::fromStdString(task.ssid));
+            qDebug() << "-----已连接----" << QString::fromStdString(task.ssid);
         } else {
             // emit connectFailed("连接失败或密码错误");
         }
@@ -100,7 +102,7 @@ void WiFiController::executeTask(const Task& task) {
         int ret = m_wifi.connectToWiFi(task.ssid);
         if (ret == 0) {
             emit connected(QString::fromStdString(task.ssid));
-            qDebug() << "已连接" << QString::fromStdString(task.ssid);
+            qDebug() << "-----已连接----" << QString::fromStdString(task.ssid);
         } else {
             emit connectFailed_1(
                 QString::fromStdString(task.ssid),
@@ -144,4 +146,7 @@ QString WiFiController::currentIp() {
 }
 bool WiFiController::isWifiConnected() {
     return m_wifi.isWifiConnected();
+}
+void WiFiController::autoDhcpIfNeeded() {
+    return m_wifi.autoDhcpIfNeeded();
 }

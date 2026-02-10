@@ -63,13 +63,14 @@ bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data) {
         return false;
     }
 
-    // 选择风格（你的项目本来就是 camelCase）
+    // 注意：C / T 用双引号，避免列名歧义
     const char* sql =
         "INSERT INTO project_info ("
         " projectId, projectName, sampleNo, sampleSource, sampleName, standardCurve,"
         " batchCode, detectedConc, referenceValue, result, detectedTime,"
-        " detectedUnit, detectedPerson, dilutionInfo"
-        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        " detectedUnit, detectedPerson, dilutionInfo,"
+        " \"C\", \"T\", ratio"
+        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     QSqlQuery q(db);
     if (!q.prepare(sql)) {
@@ -77,8 +78,9 @@ bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data) {
         return false;
     }
 
+    // ===== 原有 14 个字段 =====
     q.addBindValue(data.value("projectId"));
-    q.addBindValue(data.value("projectName"));  // ★ 新增写入项目名称
+    q.addBindValue(data.value("projectName"));
     q.addBindValue(data.value("sampleNo"));
     q.addBindValue(data.value("sampleSource"));
     q.addBindValue(data.value("sampleName"));
@@ -86,22 +88,29 @@ bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data) {
     q.addBindValue(data.value("batchCode"));
     q.addBindValue(data.value("detectedConc"));
     q.addBindValue(data.value("referenceValue"));
-
     q.addBindValue(data.value("result"));
-
     q.addBindValue(data.value("detectedTime"));
     q.addBindValue(data.value("detectedUnit"));
     q.addBindValue(data.value("detectedPerson"));
     q.addBindValue(data.value("dilutionInfo"));
 
-    qInfo() << "[ProjectsRepo][DEBUG] bound fields = " << q.boundValues().size();
+    // ===== 新增 3 个字段：C_net / T_net / ratio =====
+    const double c = data.value("C", 0.0).toDouble();
+    const double t = data.value("T", 0.0).toDouble();
+    const double r = data.value("ratio", 0.0).toDouble();
+    q.addBindValue(c);
+    q.addBindValue(t);
+    q.addBindValue(r);
+
+    qInfo() << "[ProjectsRepo][DEBUG] bound fields =" << q.boundValues().size();  // 应该是 17
 
     if (!q.exec()) {
         logSqlError("exec(insertProjectInfo)", q);
         return false;
     }
 
-    qInfo() << "✅ 插入 project_info 成功（已写入 projectName）";
+    qInfo() << "✅ 插入 project_info 成功（含 C/T/ratio）"
+            << "C=" << c << "T=" << t << "ratio=" << r;
     return true;
 }
 

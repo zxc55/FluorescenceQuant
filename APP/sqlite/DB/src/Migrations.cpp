@@ -28,9 +28,13 @@ static bool migrateProjectInfo(QSqlDatabase& db) {
     QSqlQuery q(db);
 
     q.exec("PRAGMA table_info(project_info)");
-    bool needMigrate = false;
+    bool needRebuild = false;
     bool hasProjectName = false;
     bool batchDefaultWrong = false;
+
+    bool hasC = false;
+    bool hasT = false;
+    bool hasRatio = false;
 
     while (q.next()) {
         QString col = q.value(1).toString();
@@ -43,22 +47,39 @@ static bool migrateProjectInfo(QSqlDatabase& db) {
             if (dflt != "''" && dflt != "")
                 batchDefaultWrong = true;
         }
+
+        if (col == "C")
+            hasC = true;
+        if (col == "T")
+            hasT = true;
+        if (col == "ratio")
+            hasRatio = true;
     }
 
-    needMigrate = (!hasProjectName || batchDefaultWrong);
+    // 旧版结构问题需要重建表（你原来的逻辑）
+    needRebuild = (!hasProjectName || batchDefaultWrong);
 
-    if (!needMigrate) {
-        qInfo() << "[MIGRATE] project_info 表结构正常，无需迁移";
+    // ✅ 如果只是缺 C/T/ratio，直接补列即可（不重建、不搬数据）
+    if (!needRebuild) {
+        if (!hasC)
+            execIgnore(q, "ALTER TABLE project_info ADD COLUMN C REAL NOT NULL DEFAULT 0.0;");
+        if (!hasT)
+            execIgnore(q, "ALTER TABLE project_info ADD COLUMN T REAL NOT NULL DEFAULT 0.0;");
+        if (!hasRatio)
+            execIgnore(q, "ALTER TABLE project_info ADD COLUMN ratio REAL NOT NULL DEFAULT 0.0;");
+
+        qInfo() << "[MIGRATE] project_info 仅补列完成（C/T/ratio）";
         return true;
     }
 
     qWarning() << "⚠️ project_info 表结构为旧版，需要迁移修复";
 
     // 1) 旧表改名
-    execOne(q, "ALTER TABLE project_info RENAME TO project_info_old;");
+    if (!execOne(q, "ALTER TABLE project_info RENAME TO project_info_old;"))
+        return false;
 
-    // 2) 创建新表
-    execOne(q, R"SQL(
+    // 2) 创建新表（这里把 C/T/ratio 加进去）
+    if (!execOne(q, R"SQL(
 CREATE TABLE project_info(
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     projectId       INTEGER NOT NULL,
@@ -75,31 +96,40 @@ CREATE TABLE project_info(
     detectedUnit    TEXT NOT NULL DEFAULT 'μg/kg',
     detectedPerson  TEXT NOT NULL DEFAULT '',
     dilutionInfo    TEXT NOT NULL DEFAULT '1倍',
+
+    C              REAL NOT NULL DEFAULT 0.0,
+    T              REAL NOT NULL DEFAULT 0.0,
+    ratio          REAL NOT NULL DEFAULT 0.0,
+
     FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
 );
-)SQL");
+)SQL"))
+        return false;
 
-    // 3) 迁移旧表数据
-    execOne(q, R"SQL(
+    // 3) 迁移旧表数据（新列给 0.0，避免 SELECT 不到旧列）
+    if (!execOne(q, R"SQL(
 INSERT INTO project_info(
     id, projectId, sampleNo, sampleSource, sampleName, standardCurve,
     batchCode, detectedConc, referenceValue, result, detectedTime,
-    detectedUnit, detectedPerson, dilutionInfo
+    detectedUnit, detectedPerson, dilutionInfo,
+    C, T, ratio
 )
 SELECT
     id, projectId, sampleNo, sampleSource, sampleName, standardCurve,
     batchCode, detectedConc, referenceValue, result, detectedTime,
-    detectedUnit, detectedPerson, dilutionInfo
+    detectedUnit, detectedPerson, dilutionInfo,
+    0.0, 0.0, 0.0
 FROM project_info_old;
-)SQL");
+)SQL"))
+        return false;
 
     // 4) 删除旧表
-    execOne(q, "DROP TABLE project_info_old;");
+    if (!execOne(q, "DROP TABLE project_info_old;"))
+        return false;
 
-    qInfo() << "✅ project_info 表结构迁移完成";
+    qInfo() << "✅ project_info 表结构迁移完成（含 C/T/ratio）";
     return true;
 }
-
 // =========================
 //  主迁移入口
 // =========================
@@ -211,7 +241,9 @@ CREATE TABLE IF NOT EXISTS project_info(
     FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
 );
 )SQL");
-
+    execIgnore(q, "ALTER TABLE project_info ADD COLUMN C REAL NOT NULL DEFAULT 0.0;");
+    execIgnore(q, "ALTER TABLE project_info ADD COLUMN T REAL NOT NULL DEFAULT 0.0;");
+    execIgnore(q, "ALTER TABLE project_info ADD COLUMN ratio REAL NOT NULL DEFAULT 0.0;");
     // ===== adc_data =====
     execOne(q, R"SQL(
 CREATE TABLE IF NOT EXISTS adc_data(

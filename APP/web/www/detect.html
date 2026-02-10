@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>检测详情</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <main class="container">
+    <nav class="top-nav">
+      <a href="/projects">项目列表</a>
+      <a class="active" href="/detect">检测详情</a>
+    </nav>
+
+    <section class="panel">
+      <h1>检测详情</h1>
+      <div class="toolbar">
+        <label>
+          样品编号
+          <input id="sampleNoInput" type="text" value="" placeholder="请输入样品编号" />
+        </label>
+        <button id="loadBtn" type="button">查询</button>
+      </div>
+      <p id="detectError" class="error"></p>
+    </section>
+
+    <section class="panel">
+      <h2>实验信息</h2>
+      <dl id="detailGrid" class="detail-grid"></dl>
+    </section>
+
+    <section class="panel">
+      <h2>曲线图</h2>
+      <div class="chart-wrap">
+        <canvas id="curveCanvas"></canvas>
+      </div>
+      <div id="stats" class="stats"></div>
+    </section>
+  </main>
+
+  <script type="module" src="/assets/detect.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/sw.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>

@@ -34,6 +34,7 @@ public:
     Q_INVOKABLE QString currentSSID();
     Q_INVOKABLE QString currentIp();
     Q_INVOKABLE bool isWifiConnected();
+    void autoDhcpIfNeeded();
 signals:
     void connected(const QString& ssid);
     void connectFailed_1(const QString& ssid, const QString& reason);

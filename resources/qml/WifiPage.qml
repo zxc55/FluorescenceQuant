@@ -90,9 +90,9 @@ Item {
                             wifiController.turnOn()
                             
                             startScan()
-                            wifiController.statrUdcpc()
-                           console.log("WiFi enabled")
-                           // wifiEnableScanTimer.restart()
+                            //wifiController.statrUdcpc()
+                            console.log("WiFi enabled")
+                            // wifiEnableScanTimer.restart()
                         } else {
                             wifiController.turnOff()
                             console.log("WiFi disabled")

@@ -29,10 +29,13 @@
 #include "V4L2MjpegGrabber.h"
 #include "printerDeviceController.h"
 // SQLite 组件
+#include <signal.h>  // ← 必须是这个
+
 #include <QQmlContext>
 
 #include "DBWorker.h"
 #include "DTO.h"
+#include "NetWebGuard.h"
 #include "OtaManager.h"
 #include "ProjectsViewModel.h"
 #include "SettingsViewModel.h"
@@ -58,26 +61,33 @@
 #include "QrMethodConfigViewModel.h"  // 新增：方法配置表的 ViewModel 头文件（每行注释）
 #include "QrRepoModel.h"
 #include "TaskQueueWorker.h"
+#include "embedded_web_server.h"
+namespace {
+
+std::atomic<bool> g_stop_requested{false};
+
+int parse_port(const char* s, int fallback) {
+    if (!s || *s == '\0') {
+        return fallback;
+    }
+    char* end = nullptr;
+    long v = std::strtol(s, &end, 10);
+    if (!end || *end != '\0' || v < 1 || v > 65535) {
+        return fallback;
+    }
+    return static_cast<int>(v);
+}
+
+void on_terminate_signal(int) {
+    g_stop_requested.store(true);
+}
+
+}  // namespace
+
 static bool ensureDir(const QString& path) {
     QDir d;
     return d.exists(path) ? true : d.mkpath(path);
 }
-// static QString getTouchFromScript() {
-//     QProcess p;
-//     p.start("/usr/bin/find_touch.sh");
-//     if (!p.waitForFinished(2000))
-//         return QString();
-
-//     QString out = QString::fromLocal8Bit(p.readAllStandardOutput());
-//     // out = "Touch device: /dev/input/event3\n"
-
-//     int idx = out.indexOf("/dev/input/");
-//     if (idx < 0)
-//         return QString();
-
-//     QString dev = out.mid(idx).trimmed();
-//     return dev;
-// }
 static QString detectTouchEventDevice()  // 扫描触摸 event 设备节点
 {
     QDir dir("/dev/input");                            // 指向输入设备目录
@@ -141,7 +151,7 @@ static void setupQtDpi() {
 int main(int argc, char* argv[]) {
     setupQtDpi();
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
-    qDebug() << "---------------version : 1.0.4--------------";
+    qDebug() << "---------------version : 1.0.6--------------";
 #ifndef LOCAL_BUILD
     // 输入法 / 触摸驱动
     qputenv("QT_QPA_PLATFORM",
@@ -223,11 +233,6 @@ int main(int argc, char* argv[]) {
     cardWatcher.setWatchedCode(KEY_PROG1);
     cardWatcher.setDebounceMs(20);
     cardWatcher.start();
-
-    // ======================
-    // F4 modbus 设备控制
-    // ======================
-
     // ======================
     // DBWorker + QThread
     // ======================
@@ -289,9 +294,20 @@ int main(int argc, char* argv[]) {
     // 生命周期由 main 管理，整个应用唯一
     WiFiController wifiController;
     OtaManager otaManager;
-    //
+
     DeviceManager* deviceMgr = new DeviceManager(&app);
     deviceMgr->start();
+
+    // ===============================
+    // 创建 Web Server
+    // ===============================
+    // -- --Web 配置-- --
+    embedded::ServerConfig cfg =
+        embedded::EmbeddedWebServer::defaultConfig();
+
+    embedded::EmbeddedWebServer web(cfg);
+
+    new NetWebGuard(&wifiController, &web, &app);
     // ======================
     // QML 引擎
     // ======================

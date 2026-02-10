@@ -158,6 +158,9 @@ set(SOURCES
     APP/OTA/src/OtaManager.cpp
     APP/OTA/src/unzip.cpp
     APP/OTA/src/sha256.cpp
+    APP/web/src/embedded_web_server.cpp
+    APP/Guard/src/NetWebGuard.cpp
+    APP/Guard/src/WifiDetectWorker.cpp
 )
 
 set(HEADERS
@@ -211,6 +214,10 @@ set(HEADERS
     APP/OTA/inc/OtaManager.h
     APP/OTA/inc/unzip.h
     APP/OTA/inc/sha256.h
+    APP/web/inc/embedded_web_server.h
+    APP/web/inc/httplib.h
+    APP/Guard/inc/NetWebGuard.h
+    APP/Guard/inc/WifiDetectWorker.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
@@ -236,6 +243,8 @@ target_include_directories(FluorescenceQuant PRIVATE
     ${CMAKE_SOURCE_DIR}/APP/Control_module/inc
     ${CMAKE_SOURCE_DIR}/APP/wifi/inc
     ${CMAKE_SOURCE_DIR}/APP/OTA/inc
+    ${CMAKE_SOURCE_DIR}/APP/web/inc
+    ${CMAKE_SOURCE_DIR}/APP/Guard/inc
 )
 
 if(${TARGET_BOARD} STREQUAL "全志T113-S3")
@@ -291,4 +300,22 @@ target_include_directories(FluorescenceQuant
 target_link_libraries(FluorescenceQuant
     PRIVATE
     ${MINIZIP_LIBRARIES}
+)
+# =====================================================
+# 安装 Web 静态资源（HTML / JS / CSS / 图片）
+# =====================================================
+
+set(WEB_WWW_DIR "${CMAKE_SOURCE_DIR}/APP/web/www")
+
+install(
+    DIRECTORY ${WEB_WWW_DIR}/
+    DESTINATION share/FluorescenceQuant/www
+    FILES_MATCHING
+        PATTERN "*.html"
+        PATTERN "*.js"
+        PATTERN "*.css"
+        PATTERN "*.png"
+        PATTERN "*.jpg"
+        PATTERN "*.svg"
+        PATTERN "*.ico"
 )

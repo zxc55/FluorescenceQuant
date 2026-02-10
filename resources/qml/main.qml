@@ -213,78 +213,6 @@ ApplicationWindow {
         }
     }
 
-
-    // // =====================================================
-    // // 登录遮罩层
-    // // =====================================================
-    // Rectangle {
-    //     id: loginLayer
-    //     anchors.fill: parent
-    //     color: "#AA000000"    // 半透明黑色遮罩
-    //     z: 999                // 始终覆盖最前面
-    //     visible: true         // 程序启动时显示登录界面
-    //        // 防止所有点击穿透背景
-    //     MouseArea {
-    //         anchors.fill: parent
-    //         onClicked: {}      // 什么都不做 → 阻断事件
-    //     }
-    //     //登录界面
-    //     Rectangle {
-    //         id: panel_login
-    //         width: 380
-    //         height: 260
-    //         radius: 20
-    //         color: "white"
-    //         anchors.centerIn: parent
-
-    //         Column {
-    //             anchors.centerIn: parent
-    //             spacing: 18
-
-    //             Text {
-    //                 text: "用户登录"
-    //                 font.pixelSize: 26
-    //                 font.bold: true
-    //                 color: "#333"
-    //             }
-
-    //             ComboBox {
-    //                 id: usernameField
-    //                 width: 260
-    //                 model: ["admin", "eng", "op"]
-    //                 currentIndex: 0
-    //             }
-
-    //             TextField {
-    //                 id: passwordField
-    //                 width: 260
-    //                 echoMode: TextInput.Password
-    //                 placeholderText: "密码"
-    //             }
-
-    //             Button {
-    //                 width: 260
-    //                 text: "登录"
-
-    //                 onClicked: {
-    //                     var user = usernameField.model[usernameField.currentIndex]
-    //                     userVm.login(user, passwordField.text)
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
-    // // 键盘面板
-    // InputPanel {
-    //     id: panel
-    //     z: 9999
-    //     anchors.left: parent.left
-    //     anchors.right: parent.right
-    //     anchors.bottom: parent.bottom
-    //     visible: Qt.inputMethod.visible
-    //    // parent: win
-    // }
     //顶部栏
     Rectangle {
         id: topBar
@@ -463,7 +391,10 @@ function doStartTestInternal()
         tfSampleId.text = newNo
         curNo = newNo
     }
-
+    // ✅ 取你要落库的三个值：C_net / T_net / ratioTC
+    var C_net  = Number(res.C_net   || 0)
+    var T_net  = Number(res.T_net   || 0)
+    var ratio  = Number(res.ratioTC || 0)
     // ② 记录为“已使用样品号”
     lastSampleNo = curNo
 
@@ -499,7 +430,10 @@ function doStartTestInternal()
                 "detectedTime": time,
                 "detectedUnit": unit,
                 "detectedPerson": person,
-                "dilutionInfo": dilution 
+                "dilutionInfo": dilution,
+                "C": C_net,
+                "T": T_net,
+                "ratio": ratio
                 }
             var uploadRecord = {
                 // ===== root =====

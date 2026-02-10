@@ -125,55 +125,38 @@ void DeviceService::threadLoop() {
             auto now = clock::now();
             if (now - lastSecondTick >= std::chrono::seconds(1)) {
                 lastSecondTick = now;
-                bool anyTimeout = false;
-                // 6 个孵育槽
-                for (int i = 0; i < 6; ++i) {
-                    if (!m_lastIncubPos[i])
-                        continue;  // 当前不在孵育
 
-                    int sec = 0;
-                    switch (i) {
-                    case 0:
-                        sec = m_statusObj.incubRemain1();
-                        break;
-                    case 1:
-                        sec = m_statusObj.incubRemain2();
-                        break;
-                    case 2:
-                        sec = m_statusObj.incubRemain3();
-                        break;
-                    case 3:
-                        sec = m_statusObj.incubRemain4();
-                        break;
-                    case 4:
-                        sec = m_statusObj.incubRemain5();
-                        break;
-                    case 5:
-                        sec = m_statusObj.incubRemain6();
-                        break;
+                std::vector<int> timeoutSlots;  // 记录哪些槽超时（出锁后再处理）
+
+                {
+                    // ===== 🔒 关键：保护共享状态 =====
+                    std::lock_guard<std::mutex> lk(m_mutex);
+
+                    for (int i = 0; i < 6; ++i) {
+                        if (!m_lastIncubPos[i])
+                            continue;
+
+                        int sec = m_statusObj.incubRemain(i);
+                        if (sec <= 0)
+                            continue;
+
+                        sec--;
+                        m_statusObj.setIncubRemain(i, sec);
+
+                        if (sec == 0) {
+                            timeoutSlots.push_back(i + 1);
+                        }
                     }
-                    // 已经结束，不再处理
-                    if (sec <= 0)
-                        continue;
+                }  // 🔓 解锁（非常重要）
 
-                    // ===== 倒计时 =====
-                    sec--;
-                    m_statusObj.setIncubRemain(i, sec);
+                // ===== 锁外做“业务动作”（安全）=====
+                for (int slot : timeoutSlots) {
+                    qDebug() << "[DeviceService] incub slot" << slot << "finished";
 
-                    // ★ 关键：刚好结束
-                    if (sec == 0) {
-                        qDebug() << "[DeviceService] incub slot" << i << "finished";
-                        anyTimeout = true;
-                        ExecItem it;
-                        it.func = DevFunc::incubatetimeout;
-                        it.value = i + 1;
-
-                        exec({it});  // 进入线程队列
-                        m_fuyuTimeoutSent = true;
-                    }
-                    if (anyTimeout && !m_fuyuTimeoutSent) {
-                        qDebug() << "[DeviceService] fuyutimeout write addr=8";
-                    }
+                    ExecItem it;
+                    it.func = DevFunc::incubatetimeout;
+                    it.value = slot;
+                    exec({it});  // 只是入队，不直接操作设备
                 }
             }
         }
@@ -229,7 +212,13 @@ void DeviceService::threadLoop() {
                         regs << cd << ab;
 
                         constexpr uint16_t TARGET_TEMP_ADDR = 0x0003;
-                        m_worker->postWriteRegisters(TARGET_TEMP_ADDR, regs);
+                        QMetaObject::invokeMethod(
+                            m_worker,
+                            [w = m_worker, addr = TARGET_TEMP_ADDR, regs = regs]() {
+                                w->postWriteRegisters(addr, regs);
+                            },
+                            Qt::QueuedConnection);
+                        //    m_worker->postWriteRegisters(TARGET_TEMP_ADDR, regs);
 
                         qDebug() << "[DeviceService] write target temp =" << temp;
                         break;
@@ -240,8 +229,14 @@ void DeviceService::threadLoop() {
                         int index = it.value.toInt();
                         QVector<uint16_t> regs;
                         regs.append(static_cast<uint16_t>(index));
+                        QMetaObject::invokeMethod(
+                            m_worker,
+                            [w = m_worker, addr = FUYU_TIMEOUT_ADDR, regs = regs]() {
+                                w->postWriteRegisters(addr, regs);
+                            },
+                            Qt::QueuedConnection);
 
-                        m_worker->postWriteRegisters(FUYU_TIMEOUT_ADDR, regs);
+                        // m_worker->postWriteRegisters(FUYU_TIMEOUT_ADDR, regs);
 
                         qDebug() << "[DeviceService] write incubate timeout = 1";
                         break;
@@ -252,7 +247,14 @@ void DeviceService::threadLoop() {
                         regs1.append(static_cast<uint16_t>(state));
 
                         constexpr uint16_t START_ADDR = 21;
-                        m_worker->postWriteRegisters(START_ADDR, regs1);
+                        QMetaObject::invokeMethod(
+                            m_worker,
+                            [w = m_worker, addr = START_ADDR, regs = regs1]() {
+                                w->postWriteRegisters(addr, regs);
+                            },
+                            Qt::QueuedConnection);
+
+                        // m_worker->postWriteRegisters(START_ADDR, regs1);
                         qDebug() << "[DeviceService] write start =" << state;
 
                         break;
@@ -261,7 +263,14 @@ void DeviceService::threadLoop() {
                         QVector<uint16_t> regs1;
                         regs1.append(static_cast<uint16_t>(it.value.toInt()));
                         constexpr uint16_t START_ADDR = 25;
-                        m_worker->postWriteRegisters(START_ADDR, regs1);
+                        QMetaObject::invokeMethod(
+                            m_worker,
+                            [w = m_worker, addr = START_ADDR, regs = regs1]() {
+                                w->postWriteRegisters(addr, regs);
+                            },
+                            Qt::QueuedConnection);
+
+                        //  m_worker->postWriteRegisters(START_ADDR, regs1);
 
                         qDebug() << "[DeviceService] write start = 1";
                         break;
@@ -285,7 +294,13 @@ void DeviceService::threadLoop() {
                         QVector<uint16_t> regs{reg3, reg4};
 
                         constexpr uint16_t START_ADDR = 3;
-                        m_worker->postWriteRegisters(START_ADDR, regs);
+                        QMetaObject::invokeMethod(
+                            m_worker,
+                            [w = m_worker, addr = START_ADDR, regs = regs]() {
+                                w->postWriteRegisters(addr, regs);
+                            },
+                            Qt::QueuedConnection);
+                        //  m_worker->postWriteRegisters(START_ADDR, regs);
 
                         // 加日志，便于调试
                         qDebug() << "[DeviceService] 设置温度:" << temp << "℃"
