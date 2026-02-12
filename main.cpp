@@ -252,7 +252,7 @@ int main(int argc, char* argv[]) {
     UserViewModel userVm;
     ProjectsViewModel projectsVm(db);
     HistoryViewModel historyVm(db);
-    // QrMethodConfigViewModel qrMethodConfigVm(db);  // 新增：方法配置表 ViewModel（每行注释）
+    // QrMethodConfigViewModel qrMethodConfigVm(db);
     auto* qrMethodConfigVm = new QrMethodConfigViewModel(db, &mainVm);
     PrinterDeviceController printerCtrl(&settingsVm);
     QrRepoModel* qrRepoModel = new QrRepoModel(db);

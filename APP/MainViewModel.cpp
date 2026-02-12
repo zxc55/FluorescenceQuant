@@ -301,53 +301,95 @@ QVariantList MainViewModel::getAdcData(const QString& sampleNo) {
     qInfo() << "[MainViewModel] 曲线点数=" << result.size();
     return result;
 }
+// QString MainViewModel::generateSampleNo() {
+//     QString result;
+
+//     // 1) 获取今天日期
+//     QString today = QDate::currentDate().toString("yyyyMMdd");
+
+//     // 2) 打开数据库（按照你给的 getAdcData 的方式）
+//     QSqlDatabase db = QSqlDatabase::database(readerConnName_);
+//     if (!db.isOpen()) {
+//         qWarning() << "[MainViewModel] generateSampleNo: DB not open";
+//         return today + "0001";
+//     }
+
+//     // 3) 读取 last_sample_date 和 last_sample_index
+//     QSqlQuery q(db);
+//     q.prepare("SELECT last_sample_date, last_sample_index FROM app_settings WHERE id=1");
+
+//     if (!q.exec() || !q.next()) {
+//         qWarning() << "[MainViewModel] generateSampleNo: SELECT fail";
+//         return today + "0001";
+//     }
+
+//     QString lastDate = q.value(0).toString();
+//     int lastIndex = q.value(1).toInt();
+
+//     // 4) 判断是否跨天
+//     int newIndex = 0;
+//     if (lastDate == today) {
+//         newIndex = lastIndex + 1;
+//     } else {
+//         newIndex = 1;
+//     }
+
+//     // 5) 写回数据库
+//     QSqlQuery q2(db);
+//     q2.prepare("UPDATE app_settings SET last_sample_date=?, last_sample_index=? WHERE id=1");
+//     q2.addBindValue(today);
+//     q2.addBindValue(newIndex);
+//     if (!q2.exec()) {
+//         qWarning() << "[MainViewModel] generateSampleNo: UPDATE fail";
+//     }
+
+//     // 6) 生成最终编号 YYYYMMDD + 四位序号
+//     result = today + QString("%1").arg(newIndex, 4, 10, QChar('0'));
+
+//     qInfo() << "[MainViewModel] AutoSampleNo =" << result;
+//     return result;
+// }
 QString MainViewModel::generateSampleNo() {
-    QString result;
-
-    // 1) 获取今天日期
     QString today = QDate::currentDate().toString("yyyyMMdd");
-
-    // 2) 打开数据库（按照你给的 getAdcData 的方式）
     QSqlDatabase db = QSqlDatabase::database(readerConnName_);
-    if (!db.isOpen()) {
-        qWarning() << "[MainViewModel] generateSampleNo: DB not open";
-        return today + "0001";
-    }
+    if (!db.isOpen())
+        return "";
 
-    // 3) 读取 last_sample_date 和 last_sample_index
     QSqlQuery q(db);
-    q.prepare("SELECT last_sample_date, last_sample_index FROM app_settings WHERE id=1");
+    if (!q.exec("BEGIN IMMEDIATE TRANSACTION"))
+        return "";
 
-    if (!q.exec() || !q.next()) {
-        qWarning() << "[MainViewModel] generateSampleNo: SELECT fail";
-        return today + "0001";
-    }
+    auto fail = [&db]() -> QString {
+        QSqlQuery rb(db);
+        rb.exec("ROLLBACK");
+        return "";
+    };
 
-    QString lastDate = q.value(0).toString();
-    int lastIndex = q.value(1).toInt();
+    // 保证 id=1 行存在
+    if (!q.exec("INSERT OR IGNORE INTO app_settings(id,last_sample_date,last_sample_index) VALUES(1,'',0)"))
+        return fail();
 
-    // 4) 判断是否跨天
-    int newIndex = 0;
-    if (lastDate == today) {
-        newIndex = lastIndex + 1;
-    } else {
-        newIndex = 1;
-    }
+    QSqlQuery r(db);
+    r.prepare("SELECT last_sample_date,last_sample_index FROM app_settings WHERE id=1");
+    if (!r.exec() || !r.next())
+        return fail();
 
-    // 5) 写回数据库
-    QSqlQuery q2(db);
-    q2.prepare("UPDATE app_settings SET last_sample_date=?, last_sample_index=? WHERE id=1");
-    q2.addBindValue(today);
-    q2.addBindValue(newIndex);
-    if (!q2.exec()) {
-        qWarning() << "[MainViewModel] generateSampleNo: UPDATE fail";
-    }
+    QString lastDate = r.value(0).toString();
+    int lastIndex = r.value(1).toInt();
+    int newIndex = (lastDate == today) ? (lastIndex + 1) : 1;
 
-    // 6) 生成最终编号 YYYYMMDD + 四位序号
-    result = today + QString("%1").arg(newIndex, 4, 10, QChar('0'));
+    QSqlQuery u(db);
+    u.prepare("UPDATE app_settings SET last_sample_date=?, last_sample_index=? WHERE id=1");
+    u.addBindValue(today);
+    u.addBindValue(newIndex);
+    if (!u.exec() || u.numRowsAffected() != 1)
+        return fail();
 
-    qInfo() << "[MainViewModel] AutoSampleNo =" << result;
-    return result;
+    QSqlQuery c(db);
+    if (!c.exec("COMMIT"))
+        return fail();
+
+    return today + QString("%1").arg(newIndex, 4, 10, QChar('0'));
 }
 
 static double avgPeak(const QVector<double>& y, int idx) {

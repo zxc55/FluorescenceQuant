@@ -384,13 +384,13 @@ function doStartTestInternal()
 
     var curNo = tfSampleId.text
         // ① 如果和上一次一样 → 重新生成
-    if (curNo === lastSampleNo) {
-        console.log("⚠️ 样品编号重复，重新生成")
+    // if (curNo === lastSampleNo) {
+    //     console.log("⚠️ 样品编号重复，重新生成")
 
-        var newNo = mainViewModel.generateSampleNo()
-        tfSampleId.text = newNo
-        curNo = newNo
-    }
+    //     var newNo = mainViewModel.generateSampleNo()
+    //     tfSampleId.text = newNo
+    //     curNo = newNo
+    // }
     // ✅ 取你要落库的三个值：C_net / T_net / ratioTC
     var C_net  = Number(res.C_net   || 0)
     var T_net  = Number(res.T_net   || 0)
@@ -799,9 +799,9 @@ function doStartTestInternal()
                                     width: (parent.width - 40) / 3
                                     onClicked: 
                                     {
-                                     if (settingsVm.autoIdGen) {
-                                        tfSampleId.text = mainViewModel.generateSampleNo()
-                                        }
+                                    //  if (settingsVm.autoIdGen) {
+                                    //     tfSampleId.text = mainViewModel.generateSampleNo()
+                                    //     }
                                      sampleInfoPopup.visible = true
                                     }
                                 }
@@ -2156,20 +2156,6 @@ function doStartTestInternal()
                         rowSpacing: 18
                         Layout.fillWidth: true
                         Layout.topMargin: 10
-
-                        // 自动生成样品编号
-                        // property string sampleId: {
-                        //     let date = new Date()
-
-                        //     let yyyy = date.getFullYear()
-                        //     let mm = ("0" + (date.getMonth() + 1)).slice(-2)
-                        //     let dd = ("0" + date.getDate()).slice(-2)
-                        //     let hh = ("0" + date.getHours()).slice(-2)
-                        //     let mi = ("0" + date.getMinutes()).slice(-2)
-
-                        //     return yyyy + mm + dd + hh + mi
-                        // }
-
                         // 左列 Label 右对齐，右列 TextField 填满
                         Label {
                             text: "样品编号："
@@ -2183,7 +2169,7 @@ function doStartTestInternal()
                                 font.pixelSize: 18
                                 placeholderText: "请输入样品编号"
                                 Layout.fillWidth: true                      
-                                text : mainViewModel.generateSampleNo()              
+                             //   text : "0000000000"//mainViewModel.generateSampleNo()              
                                 
                         }
 
