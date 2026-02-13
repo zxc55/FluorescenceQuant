@@ -83,3 +83,4 @@ int MotorController::readRegister(int addr) {
         return -1;
     return worker->readRegister(addr);
 }
+111
