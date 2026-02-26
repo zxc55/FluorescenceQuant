@@ -30,6 +30,7 @@ Q_PROPERTY(int count READ rowCount NOTIFY countChanged)  // 暴露 count 给 QML
         C2Role,
         T2Role
     };
+
     struct Item  // 内部缓存结构
     {
         int rid = 0;          // 表 id
