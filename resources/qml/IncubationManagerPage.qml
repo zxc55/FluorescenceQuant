@@ -13,6 +13,7 @@ Item {
     // temp: 当前温度
     // remain: 剩余秒
     // state: 状态值
+
     property var slots: [
         { temp: 36.5, remain: 1800, state: 2 },
         { temp: 37.0, remain: 1200, state: 2 },
@@ -26,6 +27,20 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: "#80000000"
+         // ★关键：吞掉所有鼠标/触摸事件，防止点到后面界面
+        MouseArea {
+            id: blocker                         // 拦截器
+            anchors.fill: parent                // 覆盖整个遮罩
+            acceptedButtons: Qt.AllButtons      // 接受所有鼠标按键（左/右/中）
+            hoverEnabled: true                  // 允许 hover（不重要，但能更稳定）
+            preventStealing: true               // 防止被 Flickable/SwipeView 抢事件（很关键）
+            propagateComposedEvents: false      // 不向下传播组合事件（避免穿透）
+
+            onPressed:  { mouse.accepted = true }  // 按下就吃掉
+            onReleased: { mouse.accepted = true }  // 松开也吃掉
+            onClicked:  { mouse.accepted = true }  // 点击吃掉（这里不做任何事）
+            onWheel:    { wheel.accepted = true }  // 滚轮也吃掉（避免下面列表滚动）
+        }
     }
     function incubStateText(active) {
         return active ? "孵育中" : "空闲"

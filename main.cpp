@@ -191,10 +191,10 @@ int main(int argc, char* argv[]) {
     qRegisterMetaType<HistoryRow>("HistoryRow");
     qRegisterMetaType<QVector<HistoryRow>>("QVector<HistoryRow>");
     qRegisterMetaType<PrintData>("PrintData");
-    qRegisterMetaType<QrMethodConfigRow>("QrMethodConfigRow");                    // 新增：方法配置行结构体元类型注册（每行注释）
-    qRegisterMetaType<QVector<QrMethodConfigRow>>("QVector<QrMethodConfigRow>");  // 新增：方法配置行列表元类型注册（每行注释）
-    qRegisterMetaType<QrMethodConfigRow>("QrMethodConfigRow");                    // 新增：方法配置行（每行注释）
-    qRegisterMetaType<QVector<QrMethodConfigRow>>("QVector<QrMethodConfigRow>");  // 新增：方法配置行列表（每行注释）
+    qRegisterMetaType<QrMethodConfigRow>("QrMethodConfigRow");
+    qRegisterMetaType<QVector<QrMethodConfigRow>>("QVector<QrMethodConfigRow>");
+    qRegisterMetaType<QrMethodConfigRow>("QrMethodConfigRow");
+    qRegisterMetaType<QVector<QrMethodConfigRow>>("QVector<QrMethodConfigRow>");
 
     // ======================
     // 注册 QML 类型

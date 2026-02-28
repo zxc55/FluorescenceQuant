@@ -82,8 +82,6 @@ void SettingsViewModel::setLang(const QString& v) {
     m_data.lang = v;
     emit changed();
 }
-
-// ✅ 如果你有 setEngineerMode 的实现，就保持这样；如果不用，干脆删掉
 void SettingsViewModel::setEngineerMode(bool v) {
     if (m_data.engineerMode == v)
         return;

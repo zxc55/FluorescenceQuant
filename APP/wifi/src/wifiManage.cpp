@@ -244,7 +244,7 @@ int WiFiManage::connectToWiFi(const std::string& ssid) {
         while (n > 0) {
             std::string selects = executeCommand("wpa_cli -p /tmp/lock/wpa_supplicant -i wlan0 status ");
             if (selects.find("wpa_state=COMPLETED") != std::string::npos) {
-                executeCommand("udhcpc -i wlan0 -n -q -T 3 -t 8");
+                executeCommand("udhcpc -i wlan0 -n -q -T 3 -t 8");  //
 #ifdef WIFI_LOG
                 qDebug("连接WiFi成功 %s", ssid.c_str());
 #endif
