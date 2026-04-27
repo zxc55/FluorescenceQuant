@@ -307,12 +307,7 @@ Timer {
     running: false
 
     onTriggered: {
-       
-      //  console.log("[MotorCheck] motorState =", motor_state)
-
         if (motor_state === 8) {   // ✅ 电机就绪
-      //      console.log("✅ 电机状态=5，开始检测")
-
             stop()
             doStartTest()    // 真正执行检测流程
         }
@@ -341,9 +336,7 @@ Timer {
 
     onTriggered: {
         var state = deviceService.status.motorState
-      //  console.log("⏳ 等待电机状态，当前 =", state)
-
-        if (state === 5) {   // 5 = 停止
+        if (state === 5) { 
             stop()
             console.log("✅ 电机已停止，开始检测流程")
 
@@ -443,8 +436,8 @@ function doStartTestInternal()
                 // ===== dataRows 内的一行 =====
                 "company": "p",              // 固定
                 "sample": sampleNo,          // 样品编号
-                "T_Value": 1,                // 你现在要求默认 1
-                "C_Value": 1,                // 默认 1
+                "T_Value": T_net,                // 
+                "C_Value": C_net,                // 
                 "T/C": res.ratioTC || 0,     // ★ 来自 calcTC
                 "concentration": res.concentration || 0, // ★
                 "result": res.resultStr || "",            // ★ 阳性 / 阴性

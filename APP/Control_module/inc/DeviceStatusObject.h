@@ -77,7 +77,7 @@ public:
 
     /* ===== setters（C++ 内部调用）===== */
     void setCurrentTemp(float v) {
-        if (qFuzzyCompare(m_currentTemp, v))
+        if (sameUiTempBucket(m_currentTemp, v))
             return;
         m_currentTemp = v;
         emit currentTempChanged();
@@ -98,7 +98,7 @@ public:
     }
 
     void setTargetTemp(float v) {
-        if (qFuzzyCompare(m_targetTemp, v))
+        if (sameUiTempBucket(m_targetTemp, v))
             return;
         m_targetTemp = v;
         emit targetTempChanged();
@@ -179,6 +179,11 @@ signals:
     void motorStateChanged();
 
 private:
+    // QML 最终按 1 位小数显示温度，小于 0.1℃ 的抖动不需要触发整套绑定刷新。
+    static bool sameUiTempBucket(float lhs, float rhs) {
+        return qRound(lhs * 10.0f) == qRound(rhs * 10.0f);
+    }
+
     float m_currentTemp = 0.0f;
     float m_targetTemp = 0.0f;
 

@@ -202,7 +202,7 @@ bool ModbusRtuClient::readRegisters(uint16_t addr, uint16_t count, QVector<uint1
     if (rc != count)  // rc != count 说明失败或读不完整
     {
         int e = errno;  // 保存 errno（避免后面函数改变 errno）
-        qWarning() << "[MODBUS] read failed"
+        qWarning() << "[MODBUS] readRegisters failed"
                    << "slave=" << m_slaveId
                    << "addr=" << addr
                    << "count=" << count
@@ -235,7 +235,7 @@ bool ModbusRtuClient::readBlock(uint16_t addr, uint16_t count, QVector<uint16_t>
     int err = errno;                            // 保存 errno（避免后面被覆盖）
     const char* errStr = modbus_strerror(err);  // 获取错误描述字符串
 
-    qWarning() << "[MODBUS] read failed slave=" << m_slaveId  // 打印失败日志
+    qWarning() << "[MODBUS] readBlock failed slave=" << m_slaveId  // 打印失败日志
                << "addr=" << addr
                << "count=" << count
                << "rc=" << rc

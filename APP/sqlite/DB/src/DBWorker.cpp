@@ -91,7 +91,6 @@ void DBWorker::initialize() {
                 task = std::move(q_.front());
                 q_.pop();
             }
-
             switch (task.type) {
             case DBTaskType::EnsureAllSchemas:
                 ensureAllSchemas();
@@ -132,7 +131,6 @@ void DBWorker::initialize() {
                 emit projectInfoInserted(ok);
                 break;
             }
-
             case DBTaskType::DeleteProject:
                 emit projectDeleted(deleteProjectInternal(task.p1), task.p1);
                 break;
@@ -175,7 +173,6 @@ void DBWorker::initialize() {
                 doLoadQrMethodConfigs();             // 调用你已经实现的加载函数（每行注释）
                 break;                               // 结束（每行注释）
             }
-
             case DBTaskType::DeleteQrMethodConfig: {  // 新增：删除 qr_method_config（每行注释）
                 doDeleteQrMethodConfig(task.p1);      // p1 存 id（每行注释）
                 break;                                // 结束（每行注释）
@@ -190,7 +187,6 @@ void DBWorker::initialize() {
         qInfo() << "[DB] worker thread stopped";
     });
 }
-
 // === 外部任务接口 ===
 void DBWorker::postLookupQrMethodConfig(const QString& qrText)  // ✅ 投递“查二维码配置”任务
 {
@@ -203,13 +199,11 @@ void DBWorker::postEnsureAllSchemas() {
     q_.push(DBTask{DBTaskType::EnsureAllSchemas});
     cv_.notify_one();
 }
-
 void DBWorker::postLoadSettings() {
     std::lock_guard<std::mutex> lk(m_);
     q_.push(DBTask{DBTaskType::LoadSettings});
     cv_.notify_one();
 }
-
 void DBWorker::postUpdateSettings(const AppSettingsRow& row) {
     std::lock_guard<std::mutex> lk(m_);
     DBTask t;
@@ -218,7 +212,6 @@ void DBWorker::postUpdateSettings(const AppSettingsRow& row) {
     q_.push(t);
     cv_.notify_one();
 }
-
 // === 用户 ===
 void DBWorker::postAuthLogin(const QString& u, const QString& p) {
     std::lock_guard<std::mutex> lk(m_);
@@ -245,7 +238,6 @@ void DBWorker::postResetPassword(const QString& u, const QString& p) {
     q_.push(DBTask::resetPassword(u, p));
     cv_.notify_one();
 }
-
 // === 项目 ===
 void DBWorker::postLoadProjects() {
     std::lock_guard<std::mutex> lk(m_);
@@ -257,7 +249,6 @@ void DBWorker::postDeleteProject(int id) {
     q_.push(DBTask::deleteProject(id));
     cv_.notify_one();
 }
-
 // === 历史记录 ===
 void DBWorker::postLoadHistory() {
     std::lock_guard<std::mutex> lk(m_);
@@ -279,7 +270,6 @@ void DBWorker::postExportHistory(const QString& path) {
     q_.push(DBTask::exportHistory(path));
     cv_.notify_one();
 }
-
 // === 内部操作实现 ===
 bool DBWorker::openDatabaseInThisThread() {
     QFileInfo fi(dbPath_);

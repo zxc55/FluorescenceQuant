@@ -124,6 +124,7 @@ bool LabKeyClientCurl::httpPost(const std::string& url,
     CURLcode rc = curl_easy_perform(curl);
     if (rc != CURLE_OK) {
         err = curl_easy_strerror(rc);
+        curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
         return false;
     }
@@ -132,7 +133,7 @@ bool LabKeyClientCurl::httpPost(const std::string& url,
     long httpCode = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
     qInfo() << "[LabKey] HTTP code =" << httpCode;
-
+    curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     return true;
 }
