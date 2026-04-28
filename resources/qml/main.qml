@@ -38,6 +38,8 @@ ApplicationWindow {
     property bool   overlayVisible: false
     property string overlayText: ""
     property bool   overlayBusy: false
+    property bool scanPageOpen: false
+    property bool incubationPageOpen: false
 
     // 当前页面（0..3）
     property int currentPage: 0
@@ -53,9 +55,15 @@ ApplicationWindow {
     property bool motorMoving: false     // 电机运行标志
     property var originCheckTimer: Timer // 定时器对象引用
     
+
     Component.onCompleted: {
+        VirtualKeyboardSettings.layoutPath = "qrc:/QtQuick/VirtualKeyboard/content/layouts"
+        console.log("VirtualKeyboardSettings.layoutPath =", VirtualKeyboardSettings.layoutPath)
+        console.log("availableLocales =", JSON.stringify(VirtualKeyboardSettings.availableLocales))
         VirtualKeyboardSettings.activeLocales = ["en_US", "zh_CN"]
+        console.log("activeLocales =", JSON.stringify(VirtualKeyboardSettings.activeLocales))
         VirtualKeyboardSettings.locale = "zh_CN"
+        console.log("locale =", VirtualKeyboardSettings.locale)
     }
 
     Connections {
@@ -197,6 +205,35 @@ ApplicationWindow {
     }
 
     // 键盘面板
+    // Rectangle {
+    //     id: keyboardLocaleSwitch
+    //     z: panel.z + 1
+    //     width: 88
+    //     height: 40
+    //     radius: 8
+    //     color: "#ffffff"
+    //     border.color: "#cfd6e2"
+    //     border.width: 1
+    //     anchors.right: parent.right
+    //     anchors.rightMargin: 16
+    //     anchors.bottom: panel.top
+    //     anchors.bottomMargin: 8
+    //     visible: Qt.inputMethod.visible
+
+    //     Text {
+    //         anchors.centerIn: parent
+    //         text: VirtualKeyboardSettings.locale === "en_US" ? "EN" : "中"
+    //         color: textMain
+    //         font.pixelSize: 18
+    //         font.bold: true
+    //     }
+
+    //     MouseArea {
+    //         anchors.fill: parent
+    //         onClicked: win.toggleKeyboardLocale()
+    //     }
+    // }
+
     InputPanel {
         id: panel
         z: 9999
@@ -805,7 +842,7 @@ function doStartTestInternal()
                                 Button {
                                     text: "孵育设置"
                                     width: (parent.width - 40) / 3
-                                     onClicked: incubationPage.visible = true
+                                     onClicked: incubationPageOpen = true
                                 }
                             }
 
@@ -964,7 +1001,7 @@ function doStartTestInternal()
                                 Button { text: "刷新"; onClicked: qrMethodConfigVm.refresh() }
                                 Button {
                                             text: "扫描二维码"
-                                            onClicked: scanPage.visible = true                                     
+                                            onClicked: scanPageOpen = true
                                            }
                                     Button {
                                         text: "删除"
@@ -2317,16 +2354,29 @@ function doStartTestInternal()
             }
         }
     }
-    CameraScannerPage {
-        id: scanPage
-        visible: false
+    Loader {
+        id: scanPageLoader
         anchors.fill: parent
+        active: scanPageOpen
+        sourceComponent: CameraScannerPage {
+            visible: true
+            onVisibleChanged: {
+                if (!visible)
+                    win.scanPageOpen = false
+            }
+        }
     }
-    IncubationManagerPage  {
-    id: incubationPage
-    visible: false
-    anchors.fill: parent
+    Loader {
+        id: incubationPageLoader
+        anchors.fill: parent
+        active: incubationPageOpen
+        sourceComponent: IncubationManagerPage {
+            visible: true
+            onVisibleChanged: {
+                if (!visible)
+                    win.incubationPageOpen = false
+            }
+        }
     }
 
 }
- 

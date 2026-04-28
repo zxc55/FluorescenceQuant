@@ -63,11 +63,27 @@ foreach(f IN LISTS ICON_FILES)
 endforeach()
 file(APPEND "${ICONS_QRC}" "  </qresource>\n</RCC>\n")
 
-# 把 application.qrc + icons.qrc 一起编译
+# --- 生成虚拟键盘布局 qrc，匹配 Qt VirtualKeyboard 默认查找路径 ---
+set(VK_LAYOUTS_DIR "${CMAKE_SOURCE_DIR}/lib/VirtualKeyboard/content/layouts")
+set(VK_LAYOUTS_QRC "${CMAKE_BINARY_DIR}/generated_resources/virtualkeyboard_layouts.qrc")
+
+file(GLOB_RECURSE VK_LAYOUT_FILES
+    LIST_DIRECTORIES false
+    "${VK_LAYOUTS_DIR}/*"
+)
+
+file(WRITE "${VK_LAYOUTS_QRC}" "<RCC>\n  <qresource prefix=\"/QtQuick/VirtualKeyboard/content/layouts\">\n")
+foreach(f IN LISTS VK_LAYOUT_FILES)
+    file(RELATIVE_PATH alias_path "${VK_LAYOUTS_DIR}" "${f}")
+    file(APPEND "${VK_LAYOUTS_QRC}" "    <file alias=\"${alias_path}\">${f}</file>\n")
+endforeach()
+file(APPEND "${VK_LAYOUTS_QRC}" "  </qresource>\n</RCC>\n")
+
+# 把 application.qrc + icons.qrc + 虚拟键盘布局 qrc 一起编译
 if(compilerType STREQUAL "QuanZhi")
-    qt5_add_resources(APP_RCS "${QRC_OUT}" "${ICONS_QRC}")
+    qt5_add_resources(APP_RCS "${QRC_OUT}" "${ICONS_QRC}" "${VK_LAYOUTS_QRC}")
 else()
-    qt_add_resources(APP_RCS "${QRC_OUT}" "${ICONS_QRC}")
+    qt_add_resources(APP_RCS "${QRC_OUT}" "${ICONS_QRC}" "${VK_LAYOUTS_QRC}")
 endif()
 
 set(CURL_ROOT "/home/pribolab/Project/curl-arm-install/usr/local")
@@ -228,6 +244,7 @@ add_executable(${PROJECT_NAME}
     ${RECOGNITION_HEADERS}
 
 )
+
 target_include_directories(${PROJECT_NAME}
     PRIVATE
         ${CMAKE_SOURCE_DIR}/third_party/curl/include   # curl 头文件

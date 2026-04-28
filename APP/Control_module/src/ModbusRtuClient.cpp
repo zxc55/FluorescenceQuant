@@ -261,29 +261,6 @@ bool ModbusRtuClient::readBlock(uint16_t addr, uint16_t count, QVector<uint16_t>
     return false;         // 返回失败
 }
 
-// bool ModbusRtuClient::readBlock(uint16_t addr, uint16_t count, QVector<uint16_t>& out) {
-//     QMutexLocker locker(&m_ioMutex);
-
-//     if (!m_connected && !reconnect())
-//         return false;
-
-//     out.resize(count);
-//     int rc = modbus_read_registers(m_ctx, addr, count, out.data());
-//     if (rc != count) {
-//         qWarning() << "[MODBUS] read failed slave=" << m_slaveId
-//                    << "addr=" << addr << "count=" << count
-//                    << "rc=" << rc << "errno=" << errno
-//                    << "err=" << modbus_strerror(errno);
-//         emit ioError(modbus_strerror(errno));
-//         m_connected = false;
-//         return reconnect();  // 这里按你策略：失败则触发重连
-//     }
-
-//     // qDebug() << "[MODBUS] read ok slave=" << m_slaveId
-//     //          << "addr=" << addr << "count=" << count
-//     //          << "regs=" << out;
-//     return true;
-// }
 void ModbusRtuClient::postWriteRegisters(uint16_t addr,
                                          const QVector<uint16_t>& regs) {
     qDebug() << "[MODBUS] postWrite tid=" << tid();  // 打印投递执行线程
