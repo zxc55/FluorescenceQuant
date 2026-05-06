@@ -177,6 +177,10 @@ set(SOURCES
     APP/web/src/embedded_web_server.cpp
     APP/Guard/src/NetWebGuard.cpp
     APP/Guard/src/WifiDetectWorker.cpp
+    APP/curve/cubicSpline_rida.cpp
+    APP/curve/logit_rida.cpp
+    APP/curve/piecewiseLinear_rida.cpp
+    APP/curve/algorithm.cpp
 )
 
 set(HEADERS
@@ -234,6 +238,11 @@ set(HEADERS
     APP/web/inc/httplib.h
     APP/Guard/inc/NetWebGuard.h
     APP/Guard/inc/WifiDetectWorker.h
+    APP/curve/cubicSpline_rida.h
+    APP/curve/logit_rida.h
+    APP/curve/piecewiseLinear_rida.h
+    APP/curve/json.hpp
+    APP/curve/algorithm.h
 )
 add_executable(${PROJECT_NAME}
     ${SOURCES}
@@ -262,6 +271,7 @@ target_include_directories(FluorescenceQuant PRIVATE
     ${CMAKE_SOURCE_DIR}/APP/OTA/inc
     ${CMAKE_SOURCE_DIR}/APP/web/inc
     ${CMAKE_SOURCE_DIR}/APP/Guard/inc
+    ${CMAKE_SOURCE_DIR}/APP/curve
 )
 
 if(${TARGET_BOARD} STREQUAL "全志T113-S3")

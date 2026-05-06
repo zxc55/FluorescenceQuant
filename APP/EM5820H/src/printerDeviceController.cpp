@@ -63,8 +63,11 @@ void PrinterDeviceController::printRecord(const QVariantMap& record) {
     lines << QString("检测结果: %1")
                  .arg(record.value("result").toString());
 
+    const QString detectedConcText = record.value("detectedConcText").toString();
     lines << QString("检测浓度: %1 %2 ug/kg")
-                 .arg(record.value("detectedConc").toDouble(), 0, 'f', 2)
+                 .arg(detectedConcText.isEmpty()
+                          ? QString::number(record.value("detectedConc").toDouble(), 'f', 2)
+                          : detectedConcText)
                  .arg(record.value("detectedUnit").toString());
     if (m_settings && m_settings->printReferenceValue()) {
         lines << QString("参考值: %1 %2")

@@ -203,37 +203,6 @@ ApplicationWindow {
             Qt.callLater(loginLayer.adjustLoginPanel)     // 防止初始状态异常
         }
     }
-
-    // 键盘面板
-    // Rectangle {
-    //     id: keyboardLocaleSwitch
-    //     z: panel.z + 1
-    //     width: 88
-    //     height: 40
-    //     radius: 8
-    //     color: "#ffffff"
-    //     border.color: "#cfd6e2"
-    //     border.width: 1
-    //     anchors.right: parent.right
-    //     anchors.rightMargin: 16
-    //     anchors.bottom: panel.top
-    //     anchors.bottomMargin: 8
-    //     visible: Qt.inputMethod.visible
-
-    //     Text {
-    //         anchors.centerIn: parent
-    //         text: VirtualKeyboardSettings.locale === "en_US" ? "EN" : "中"
-    //         color: textMain
-    //         font.pixelSize: 18
-    //         font.bold: true
-    //     }
-
-    //     MouseArea {
-    //         anchors.fill: parent
-    //         onClicked: win.toggleKeyboardLocale()
-    //     }
-    // }
-
     InputPanel {
         id: panel
         z: 9999
@@ -439,6 +408,7 @@ function doStartTestInternal()
     var curve    = standardCurveBox.currentText  // 标准曲线
     var conc     = Number(res.concentration || 0)                        // 检测浓度
     var ref      = parseFloat(refValueField.text || 0)  // 参考值
+    var concText = String(res.concentrationDisplay || res.concentration || 0)
     var result   = res.resultStr || ""                  // 检测结果
     var time     = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss") // 时间
     var unit     = tfLab.text               // 检测单位
@@ -491,7 +461,9 @@ function doStartTestInternal()
         // === 写入数据库 ===
         var ok = projectsVm.insertProjectInfo(record)
         console.log(ok ? "[DB] 插入成功 ✅" : "[DB] 插入失败 ❌")
-        var concStr = (isFinite(conc) ? conc.toFixed(3) : "0.00")
+     //   var concStr = (isFinite(conc) ? conc.toFixed(3) : "0.00")
+        var concStr = concText
+
         // === 界面提示完成 ===
        overlayText = ok                                                   // 根据数据库写入结果决定提示文本
         ? ("检测完成，数据已保存 \n浓度：" + concStr)              // 成功：提示 + 浓度
@@ -838,11 +810,12 @@ function doStartTestInternal()
                                 Button {
                                     text: "详细信息"
                                     width: (parent.width - 40) / 3
+                                    onClicked:mainViewModel.testCalcTCByRatio(0.2,projectPage.selectedId)
                                 }
                                 Button {
                                     text: "孵育设置"
                                     width: (parent.width - 40) / 3
-                                     onClicked: incubationPageOpen = true
+                                    onClicked: incubationPageOpen = true
                                 }
                             }
 

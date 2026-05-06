@@ -295,8 +295,8 @@ int main(int argc, char* argv[]) {
     WiFiController wifiController;
     OtaManager otaManager;
 
-    // DeviceManager* deviceMgr = new DeviceManager(&app);
-    // deviceMgr->start();
+    DeviceManager* deviceMgr = new DeviceManager(&app);
+    deviceMgr->start();
 
     // ===============================
     // 创建 Web Server
@@ -321,7 +321,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("keys", &keysProxy);
     engine.rootContext()->setContextProperty("qrScanner", &qrScanner);
     engine.rootContext()->setContextProperty("printerCtrl", &printerCtrl);
-    //  engine.rootContext()->setContextProperty("deviceService", deviceMgr->service());
+    engine.rootContext()->setContextProperty("deviceService", deviceMgr->service());
     engine.rootContext()->setContextProperty("dbWorker", qrRepoModel);
     engine.rootContext()->setContextProperty("labkeyService", labkeyService);
     engine.rootContext()->setContextProperty("wifiController", &wifiController);

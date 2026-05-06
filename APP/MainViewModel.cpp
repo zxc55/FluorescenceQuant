@@ -16,6 +16,9 @@
 #include <thread>
 
 #include "IIODeviceController.h"
+#include "curve/cubicSpline_rida.h"
+#include "curve/logit_rida.h"
+#include "curve/piecewiseLinear_rida.h"
 
 // =========================
 // 峰候选结构体
@@ -65,6 +68,13 @@ static double fourPL_inverse(double y, const MainViewModel::FourPLParams& p) {
 
     return (x < 0.0) ? 0.0 : x;
 }
+
+static QString formatLimitValue(double value) {
+    if (std::fabs(value - std::round(value)) < 1e-9)
+        return QString::number(static_cast<qint64>(std::llround(value)));
+    return QString::number(value, 'f', 3);
+}
+
 class ScopedTimer {
 public:
     explicit ScopedTimer(const QString& tag)
@@ -444,6 +454,145 @@ static bool parseFourPLFromJson(const QString& json,
     return true;
 }
 
+static std::vector<double> jsonArrayToVector(const QJsonValue& value) {
+    std::vector<double> out;
+    if (!value.isArray()) {
+        return out;
+    }
+
+    const QJsonArray array = value.toArray();
+    out.reserve(array.size());
+    for (const QJsonValue& item : array) {
+        out.push_back(item.toDouble());
+    }
+    return out;
+}
+
+static bool parseMethodJson(const QString& json, QJsonObject& out) {
+    if (json.trimmed().isEmpty()) {
+        qWarning() << "[Curve] empty methodData";
+        return false;
+    }
+
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        qWarning() << "[Curve] json parse failed:" << err.errorString();
+        return false;
+    }
+
+    out = doc.object();
+    return true;
+}
+
+static bool parseCubicSplineParam(const QJsonObject& o,
+                                  RIDA_ALGORITHM::CubicSplineCurveParam& out) {
+    out.n = o.value("n").toInt(0);
+    out.scale = o.value("scale").toDouble(100000.0);
+    out.k = jsonArrayToVector(o.value("k"));
+    out.a = jsonArrayToVector(o.value("a"));
+    out.b = jsonArrayToVector(o.value("b"));
+    out.c = jsonArrayToVector(o.value("c"));
+    out.d = jsonArrayToVector(o.value("d"));
+    out.xMin = o.value("xMin").toDouble(0.0);
+    out.xMax = o.value("xMax").toDouble(0.0);
+    return true;
+}
+
+static bool parsePiecewiseLinearParam(const QJsonObject& o,
+                                      RIDA_ALGORITHM::PiecewiseLinear::Param& out) {
+    out.n = o.value("n").toInt(0);
+    out.scale = o.value("scale").toDouble(100000.0);
+    out.k = jsonArrayToVector(o.value("k"));
+    out.y = jsonArrayToVector(o.value("y"));
+    out.slope = jsonArrayToVector(o.value("slope"));
+    out.xMin = o.value("xMin").toDouble(0.0);
+    out.xMax = o.value("xMax").toDouble(0.0);
+    return true;
+}
+
+static bool calculateConcentrationByCurveType(const QString& methodData,
+                                              double ratio,
+                                              double& concentration,
+                                              int& curveType) {
+    QJsonObject o;
+    if (!parseMethodJson(methodData, o)) {
+        return false;
+    }
+
+    curveType = o.value("type").toInt(0);
+
+    switch (curveType) {
+    case 0: {
+        MainViewModel::FourPLParams curve;
+        if (!parseFourPLFromJson(methodData, curve)) {
+            qWarning() << "[Curve] invalid FourPL params";
+            return false;
+        }
+        concentration = fourPL_inverse(ratio, curve);
+        return true;
+    }
+    case 1: {
+        RIDA_ALGORITHM::CubicSplineCurveParam param;
+        parseCubicSplineParam(o, param);
+
+        RIDA_ALGORITHM::CubicSpline curve;
+        const int importRet = curve.importCurveParam(param);
+        if (importRet != 0) {
+            qWarning() << "[Curve] CubicSpline import failed, ret =" << importRet;
+            return false;
+        }
+
+        const int ret = curve.getX(ratio, concentration);
+        if (ret == 79) {
+            qWarning() << "[Curve] CubicSpline getX failed, ret =" << ret;
+            return false;
+        }
+        return true;
+    }
+    case 2: {
+        RIDA_ALGORITHM::Logit::Parameter param;
+        param.k = o.value("k").toDouble(0.0);
+        param.b = o.value("b").toDouble(0.0);
+
+        RIDA_ALGORITHM::Logit curve;
+        const int importRet = curve.importCurveParam(param);
+        if (importRet != 0) {
+            qWarning() << "[Curve] Logit import failed, ret =" << importRet;
+            return false;
+        }
+
+        const int ret = curve.getX(ratio, concentration);
+        if (ret == 79) {
+            qWarning() << "[Curve] Logit getX failed, ret =" << ret;
+            return false;
+        }
+        return true;
+    }
+    case 3: {
+        RIDA_ALGORITHM::PiecewiseLinear::Param param;
+        parsePiecewiseLinearParam(o, param);
+
+        RIDA_ALGORITHM::PiecewiseLinear curve;
+        const int importRet = curve.importCurveParam(param);
+        if (importRet != 0) {
+            qWarning() << "[Curve] PiecewiseLinear import failed, ret =" << importRet;
+            return false;
+        }
+
+        const int ret = curve.getX(ratio, concentration);
+        if (ret == 79) {
+            qWarning() << "[Curve] PiecewiseLinear getX failed, ret =" << ret;
+            return false;
+        }
+        return true;
+    }
+    default:
+        qWarning() << "[Curve] unsupported curve type =" << curveType;
+        return false;
+    }
+}
+
 // =========================
 // 计算区间 [L,R] 的前缀最小和后缀最小，用于快速算 prominence
 // leftMin[k]  = min(y[L..L+k])
@@ -654,14 +803,13 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
         qWarning() << "[calcTC] invalid method config id =" << id;
         return QVariantMap();
     }
-    // =========================
-    // 0.1) 从 methodData 解析 4PL 参数
-    // =========================
-    FourPLParams curve;
-    if (!parseFourPLFromJson(method.methodData, curve)) {
-        qWarning() << "[calcTC] invalid FourPL params, methodId =" << id;
+    // methodData 中的 type 决定 T/C 后使用哪条曲线反算浓度。
+    QJsonObject methodCurveJson;
+    if (!parseMethodJson(method.methodData, methodCurveJson)) {
+        qWarning() << "[calcTC] invalid curve params, methodId =" << id;
         return QVariantMap();
     }
+    const int curveType = methodCurveJson.value("type").toInt(0);
     // -------------------------
     // 1) 转数组
     // -------------------------
@@ -754,16 +902,31 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
         ratio = T_net / C_net;
 
     // ======================================================================
-    // 7) 四参数浓度
+    // 7) 根据曲线类型计算浓度
     // ======================================================================
-    double concentration = fourPL_inverse(ratio, curve);
+    double rawConcentration = 0.0;
+    int calcCurveType = 0;
+    if (!calculateConcentrationByCurveType(method.methodData, ratio, rawConcentration, calcCurveType)) {
+        qWarning() << "[calcTC] calculate concentration failed, methodId =" << id
+                   << " curveType=" << curveType;
+        return QVariantMap();
+    }
+    double concentration = rawConcentration;
+    QString concentrationDisplay;
     qDebug() << "--------concentration = " << concentration;
     // ======================================================================
     // 8) ★★★ 只有两个结果：阳性 / 阴性 ★★★
     // ======================================================================
     const double CUTOFF = 0.20;  // ← 竞争法典型阈值
-    if (concentration > method.C2)
+    if (method.C2 > 0 && concentration > method.C2) {
         concentration = method.C2;
+        concentrationDisplay = ">" + formatLimitValue(method.C2);
+    } else if (method.T1 > 0 && concentration < method.T1) {
+        concentration = method.T1;
+        concentrationDisplay = "<" + formatLimitValue(method.T1);
+    } else {
+        concentrationDisplay = QString::number(concentration, 'f', 3);
+    }
     QString resultStr;
     if (concentration > method.C1)
         resultStr = "阳性";
@@ -785,7 +948,9 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
     r["T_net"] = T_net;
 
     r["ratioTC"] = ratio;
+    r["curveType"] = calcCurveType;
     r["concentration"] = concentration;
+    r["concentrationDisplay"] = concentrationDisplay;
     r["resultStr"] = resultStr;
 
     // // 日志
@@ -797,7 +962,9 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
              << " C_net=" << C_net
              << " T_net=" << T_net
              << " ratio=" << ratio
+             << " rawConc=" << rawConcentration
              << " conc=" << concentration
+             << " concDisplay=" << concentrationDisplay
              << " resultStr=" << resultStr;
     qDebug() << "[calcTC][DBG]"
              << "range=0.." << (n - 1)                // 本次判峰范围注释
@@ -806,6 +973,86 @@ QVariantMap MainViewModel::calcTC(const QVariantList& adcList, int id) {
              << "p2=" << p2 << "y2=" << y[p2]         // 第二个峰注释
              << "idxC=" << idxC << "yC=" << y[idxC]   // C 峰注释
              << "idxT=" << idxT << "yT=" << y[idxT];  // T 峰注释
+
+    return r;
+}
+QVariantMap MainViewModel::testCalcTCByRatio(double ratio, int id) {
+    QVariantMap r;
+
+    if (!m_methodVm) {
+        qWarning() << "[testCalcTCByRatio] methodVm not set";
+        return r;
+    }
+
+    QrMethodConfigViewModel::Item method =
+        m_methodVm->findItemById(id);
+
+    qInfo() << "[testCalcTCByRatio] methodId=" << id
+            << "ratio=" << ratio
+            << "methodData.len=" << method.methodData.size()
+            << "methodData=" << method.methodData;
+
+    if (method.rid == 0) {
+        qWarning() << "[testCalcTCByRatio] invalid method config id =" << id;
+        return QVariantMap();
+    }
+
+    QJsonObject methodCurveJson;
+    if (!parseMethodJson(method.methodData, methodCurveJson)) {
+        qWarning() << "[testCalcTCByRatio] invalid curve params, methodId =" << id;
+        return QVariantMap();
+    }
+
+    const int curveType = methodCurveJson.value("type").toInt(0);
+    qInfo() << "[testCalcTCByRatio] curveType=" << curveType
+            << "ratio=" << ratio;
+
+    double rawConcentration = 0.0;
+    int calcCurveType = 0;
+    if (!calculateConcentrationByCurveType(method.methodData, ratio, rawConcentration, calcCurveType)) {
+        qWarning() << "[testCalcTCByRatio] calculate concentration failed, methodId =" << id
+                   << " curveType=" << curveType
+                   << " ratio=" << ratio;
+        return QVariantMap();
+    }
+    qInfo() << "[testCalcTCByRatio] rawConcentration=" << rawConcentration
+            << "calcCurveType=" << calcCurveType;
+
+    double concentration = rawConcentration;
+    QString concentrationDisplay;
+
+    if (method.C2 > 0 && concentration > method.C2) {
+        concentration = method.C2;
+        concentrationDisplay = ">" + formatLimitValue(method.C2);
+    } else if (method.T1 > 0 && concentration < method.T1) {
+        concentration = method.T1;
+        concentrationDisplay = "<" + formatLimitValue(method.T1);
+    } else {
+        concentrationDisplay = QString::number(concentration, 'f', 3);
+    }
+
+    QString resultStr;
+    if (concentration > method.C1)
+        resultStr = "阳性";
+    else
+        resultStr = "阴性";
+
+    r["methodId"] = id;
+    r["ratioTC"] = ratio;
+    r["curveType"] = calcCurveType;
+    r["rawConcentration"] = rawConcentration;
+    r["concentration"] = concentration;
+    r["concentrationDisplay"] = concentrationDisplay;
+    r["resultStr"] = resultStr;
+
+    qInfo() << "[testCalcTCByRatio] done"
+            << "methodId=" << id
+            << "ratio=" << ratio
+            << "curveType=" << calcCurveType
+            << "rawConcentration=" << rawConcentration
+            << "concentration=" << concentration
+            << "concentrationDisplay=" << concentrationDisplay
+            << "resultStr=" << resultStr;
 
     return r;
 }

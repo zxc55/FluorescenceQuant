@@ -238,7 +238,7 @@ function parseQrText(text) {
     onVisibleChanged: {
         if (visible) {
             _closing = false  
-            deviceService.ENFLALED(1)
+            deviceService.ENFLALED(1)// 打开闪光灯
             qrScanner.startScan()
             resultLabel.text = "请对准二维码"
         } else {

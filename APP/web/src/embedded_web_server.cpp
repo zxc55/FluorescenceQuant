@@ -33,11 +33,11 @@
 #include "httplib.h"
 
 #ifndef APP_DEFAULT_WEB_ROOT
-#define APP_DEFAULT_WEB_ROOT "/mnt/SDCARD/www"
+#define APP_DEFAULT_WEB_ROOT "/usr/lib/www"
 #endif
 
 #ifndef APP_DEFAULT_BROWSE_ROOT
-#define APP_DEFAULT_BROWSE_ROOT "/mnt/SDCARD"
+#define APP_DEFAULT_BROWSE_ROOT "/usr/lib/"
 #endif
 
 #ifndef APP_DB_PATH

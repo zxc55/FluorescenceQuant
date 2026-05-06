@@ -26,7 +26,7 @@ void DeviceManager::start() {
         return;
 
     // ✅ 启动 DeviceService 内部 std::thread
-    m_service->start(500);
+    m_service->start(1000);
 }
 
 void DeviceManager::stop() {

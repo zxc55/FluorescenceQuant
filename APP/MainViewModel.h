@@ -20,6 +20,8 @@ public:
     explicit MainViewModel(QObject* parent = nullptr);
     ~MainViewModel();
     Q_INVOKABLE QVariantMap calcTC(const QVariantList& adcList, int id);
+    Q_INVOKABLE QVariantMap testCalcTCByRatio(double ratio, int id);
+
     // Q_INVOKABLE QVariantMap calcTC_FixedWindow(const QVariantList& adcList);
     struct FourPLParams {
         double A;  // 曲线高端（低浓度）
