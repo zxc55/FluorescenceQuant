@@ -55,7 +55,7 @@ function loadCurve() {
         axisY.min = yMin
         axisY.max = yMax
 
-        feeder.buildAndReplace(adcList)
+        feeder.buildAndReplace(adcList)//画线
 
         root.visible = false
         root.visible = true

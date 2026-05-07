@@ -8,7 +8,7 @@
 #include <mutex>
 #include <thread>
 #define APP_TITLE "FLA_T113"
-#define APP_VERSION "1.0.6"
+#define APP_VERSION "1.0.9"
 class OtaManager : public QObject {
     Q_OBJECT
 public:

@@ -169,7 +169,7 @@ ApplicationWindow {
                     width: 260
                     echoMode: TextInput.Password
                     placeholderText: "密码"
-
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly | Qt.ImhNoPredictiveText
                     onActiveFocusChanged: {               // ★ 点进密码框时，确保不被遮
                         if (activeFocus) {                // 获得焦点
                             Qt.callLater(loginLayer.adjustLoginPanel) // 下一帧再算（避免布局未更新）
@@ -1023,12 +1023,17 @@ function doStartTestInternal()
                                     color: "#f3f4f6"
                                     border.color: "#d1d5db"
                                     border.width: 1
-
+  
                                     Row {
                                         anchors.fill: parent
                                         anchors.margins: 8
                                         spacing: 8
-
+                                         // 左侧选择框占位列，对齐数据行
+                                        Rectangle {
+                                            width: 24
+                                            height: parent.height
+                                            color: "transparent"
+                                        }
                                         Rectangle {
                                             width: projArea.colId
                                             height: parent.height
@@ -1156,7 +1161,7 @@ function doStartTestInternal()
                                                         color: "transparent"
                                                         Label {
                                                             anchors.centerIn: parent
-                                                            text: rid
+                                                            text: index + 1
                                                             color: textMain
                                                             font.bold: true
                                                             horizontalAlignment: Text.AlignHCenter
@@ -1439,7 +1444,7 @@ function doStartTestInternal()
                                                 font.bold: true 
                                                 font.pixelSize: 14
                 
-                                                } 
+                                                }
                                         }
                                         Rectangle { width: 0;                      height: parent.height; color: "transparent"; visible: false }
                                         Rectangle { width: historyPage.w_pname;    height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: "项目名称"; font.bold: true }}
@@ -1508,7 +1513,7 @@ function doStartTestInternal()
                                                 }
 
                                                 // 其余列
-                                                Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: modelId } }
+                                                Rectangle { width: historyPage.w_id;       height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: historyVm.count - index} }
                                                // Rectangle { width: historyPage.w_pid;      height: parent.height; color: "transparent"; Text { anchors.centerIn: parent; text: projectId } }
                                                 Rectangle { width: historyPage.w_pid;      height:parent.height;  visible: false}
                                                 Rectangle { width: historyPage.w_pname;    height: parent.height; color: "transparent"; HeaderText { anchors.centerIn: parent; text: projectName }}

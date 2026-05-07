@@ -132,10 +132,10 @@ void OtaManager::checkUpdate() {
 
     emit info("正在检查更新…");
 
-    // 1. SD 卡检查
-    if (!QDir(OTA_DIR).exists()) {
-        OTA_LOG("SD card not found:" << OTA_DIR);
-        emit error("未检测到 SD 卡，无法升级");
+    // 1. OTA 工作目录检查，不存在则创建
+    if (!QDir(OTA_DIR).exists() && !QDir().mkpath(OTA_DIR)) {
+        OTA_LOG("create OTA dir failed:" << OTA_DIR);
+        emit error("创建升级目录失败，无法升级");
         emit finished(false);
         return;
     }

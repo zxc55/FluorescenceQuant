@@ -57,6 +57,30 @@ static QVariant pick(const QVariantMap& m, const char* camel, const char* snake)
         return it.value();
     return QVariant();
 }
+
+static QString textOrDefault(const QVariantMap& m, const char* key,
+                             const QString& fallback = QString()) {
+    const QVariant v = m.value(key);
+    if (!v.isValid() || v.isNull())
+        return fallback;
+    return v.toString();
+}
+
+static int intOrDefault(const QVariantMap& m, const char* key, int fallback = 0) {
+    const QVariant v = m.value(key);
+    if (!v.isValid() || v.isNull())
+        return fallback;
+    return v.toInt();
+}
+
+static double doubleOrDefault(const QVariantMap& m, const char* key,
+                              double fallback = 0.0) {
+    const QVariant v = m.value(key);
+    if (!v.isValid() || v.isNull())
+        return fallback;
+    return v.toDouble();
+}
+
 bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data) {
     if (!db.isOpen()) {
         qWarning() << "[ProjectsRepo] insertProjectInfo: db not open";
@@ -79,25 +103,25 @@ bool insertProjectInfo(QSqlDatabase& db, const QVariantMap& data) {
     }
 
     // ===== 原有 14 个字段 =====
-    q.addBindValue(data.value("projectId"));
-    q.addBindValue(data.value("projectName"));
-    q.addBindValue(data.value("sampleNo"));
-    q.addBindValue(data.value("sampleSource"));
-    q.addBindValue(data.value("sampleName"));
-    q.addBindValue(data.value("standardCurve"));
-    q.addBindValue(data.value("batchCode"));
-    q.addBindValue(data.value("detectedConc"));
-    q.addBindValue(data.value("referenceValue"));
-    q.addBindValue(data.value("result"));
-    q.addBindValue(data.value("detectedTime"));
-    q.addBindValue(data.value("detectedUnit"));
-    q.addBindValue(data.value("detectedPerson"));
-    q.addBindValue(data.value("dilutionInfo"));
+    q.addBindValue(intOrDefault(data, "projectId"));
+    q.addBindValue(textOrDefault(data, "projectName"));
+    q.addBindValue(textOrDefault(data, "sampleNo"));
+    q.addBindValue(textOrDefault(data, "sampleSource"));
+    q.addBindValue(textOrDefault(data, "sampleName"));
+    q.addBindValue(textOrDefault(data, "standardCurve"));
+    q.addBindValue(textOrDefault(data, "batchCode"));
+    q.addBindValue(doubleOrDefault(data, "detectedConc"));
+    q.addBindValue(doubleOrDefault(data, "referenceValue"));
+    q.addBindValue(textOrDefault(data, "result"));
+    q.addBindValue(textOrDefault(data, "detectedTime"));
+    q.addBindValue(textOrDefault(data, "detectedUnit", QStringLiteral("μg/kg")));
+    q.addBindValue(textOrDefault(data, "detectedPerson"));
+    q.addBindValue(textOrDefault(data, "dilutionInfo", QStringLiteral("1倍")));
 
     // ===== 新增 3 个字段：C_net / T_net / ratio =====
-    const double c = data.value("C", 0.0).toDouble();
-    const double t = data.value("T", 0.0).toDouble();
-    const double r = data.value("ratio", 0.0).toDouble();
+    const double c = doubleOrDefault(data, "C");
+    const double t = doubleOrDefault(data, "T");
+    const double r = doubleOrDefault(data, "ratio");
     q.addBindValue(c);
     q.addBindValue(t);
     q.addBindValue(r);

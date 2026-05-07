@@ -151,7 +151,7 @@ static void setupQtDpi() {
 int main(int argc, char* argv[]) {
     setupQtDpi();
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
-    qDebug() << "---------------version : 1.0.7--------------";
+    qDebug() << "---------------version : 1.0.9--------------";
 #ifndef LOCAL_BUILD
     // 输入法 / 触摸驱动
     qputenv("QT_QPA_PLATFORM",
